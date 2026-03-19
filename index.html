@@ -190,6 +190,19 @@ textarea.form-control{min-height:80px;resize:vertical}
 .empty-title{font-size:17px;font-weight:700;color:var(--text);margin-bottom:6px}
 .empty-desc{font-size:13px;color:var(--text-2);max-width:400px}
 
+/* ═══════════════════════ VIEW TOGGLE ═══════════════════════ */
+.view-toggle{display:flex;gap:6px;margin-bottom:18px}
+.view-btn{display:flex;align-items:center;gap:8px;padding:9px 18px;border-radius:var(--r-sm);border:1.5px solid var(--border-2);font-size:12px;font-weight:600;color:var(--text-2);transition:all .2s;min-height:38px}
+.view-btn.active{background:var(--brand-light);color:#fff;border-color:var(--brand-light)}
+.view-btn:hover:not(.active){border-color:var(--brand-light);color:var(--brand-light)}
+
+/* ═══════════════════════ GANTT ═══════════════════════ */
+.gantt-wrap{background:var(--card-glass);backdrop-filter:blur(var(--glass-blur));border:1px solid var(--glass-border);border-radius:var(--r);overflow:hidden;margin-bottom:18px;box-shadow:var(--sh)}
+.gantt-toolbar{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:10px}
+.gantt-scale-btn{padding:6px 14px;border-radius:var(--r-sm);font-size:11px;font-weight:600;color:var(--text-2);border:1.5px solid var(--border-2);transition:all .2s;min-height:32px}
+.gantt-scale-btn.active{background:var(--brand-light);color:#fff;border-color:var(--brand-light)}
+.gantt-scale-btn:hover:not(.active){border-color:var(--brand-light);color:var(--brand-light)}
+
 /* ═══════════════════════ UPLOAD / IMPORT ═══════════════════════ */
 .upload-pill{display:inline-flex;align-items:center;gap:8px;padding:7px 16px;border-radius:24px;border:1.5px solid var(--border-2);font-size:12px;font-weight:500;color:var(--text-2);transition:all .2s;position:relative;overflow:hidden;min-height:36px;cursor:pointer}
 .upload-pill:hover{border-color:var(--brand-light);color:var(--brand-light);background:var(--brand-pale)}
@@ -311,8 +324,14 @@ textarea.form-control{min-height:80px;resize:vertical}
         <button class="filter-reset" onclick="resetFilters('personnel')">Clear All</button>
       </div>
       <div class="kpi-row" id="kpi-personnel"></div>
-      <div id="table-personnel"><div class="loading-spinner"><div class="spinner"></div>Loading personnel data...</div></div>
-      <div class="chart-grid" id="charts-personnel" style="margin-top:24px"></div>
+      <div class="view-toggle">
+        <button class="view-btn active" id="pvbtn-gantt" onclick="setPersonnelView('gantt')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><rect x="3" y="4" width="18" height="4" rx="1"/><rect x="3" y="10" width="12" height="4" rx="1"/><rect x="3" y="16" width="15" height="4" rx="1"/></svg>Gantt Calendar</button>
+        <button class="view-btn" id="pvbtn-table" onclick="setPersonnelView('table')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="3" x2="9" y2="21"/></svg>Table</button>
+        <button class="view-btn" id="pvbtn-charts" onclick="setPersonnelView('charts')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Charts</button>
+      </div>
+      <div id="personnel-gantt-view"></div>
+      <div id="table-personnel" style="display:none"><div class="loading-spinner"><div class="spinner"></div>Loading personnel data...</div></div>
+      <div class="chart-grid" id="charts-personnel" style="display:none;margin-top:24px"></div>
     </div>
 
     <!-- ═══════ EQUIPMENT TAB ═══════ -->
@@ -791,6 +810,9 @@ function renderPersonnel() {
     { label: 'Technicians', value: uniqueTechs, format: 'int', accent: 'var(--warm)' },
     { label: 'Avg Duration', value: avgDur, format: 'int', sub: 'days', accent: 'var(--warning)' }
   ]);
+
+  // Gantt (default view)
+  if (personnelView === 'gantt') renderGantt(d, 'personnel-gantt-view');
 
   // Table
   const container = document.getElementById('table-personnel');
@@ -1496,6 +1518,248 @@ async function uploadCertificate(equipmentId) {
   const { data } = sb.storage.from('certificates').getPublicUrl(path);
   pendingCertFile = null;
   return data.publicUrl;
+}
+
+// ─── Gantt Chart ───
+let personnelView = 'gantt';
+let ganttScale = 'month';
+
+function setPersonnelView(v) {
+  personnelView = v;
+  document.getElementById('pvbtn-gantt').classList.toggle('active', v === 'gantt');
+  document.getElementById('pvbtn-table').classList.toggle('active', v === 'table');
+  document.getElementById('pvbtn-charts').classList.toggle('active', v === 'charts');
+  document.getElementById('personnel-gantt-view').style.display = v === 'gantt' ? '' : 'none';
+  document.getElementById('table-personnel').style.display = v === 'table' ? '' : 'none';
+  document.getElementById('charts-personnel').style.display = v === 'charts' ? '' : 'none';
+  if (v === 'gantt') renderGantt(state.personnel.filtered, 'personnel-gantt-view');
+}
+
+function setGanttScale(scale) {
+  ganttScale = scale;
+  renderGantt(state.personnel.filtered, 'personnel-gantt-view');
+}
+
+function renderGantt(data, containerId) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = '';
+
+  // Build tech map from Supabase data
+  const techMap = {};
+  data.forEach(r => {
+    const name = r.technician_name;
+    if (!name || !r.start_date) return;
+    const s = new Date(r.start_date);
+    const e = r.end_date ? new Date(r.end_date) : new Date(s.getTime() + (r.duration_days || 14) * 864e5);
+    if (isNaN(s.getTime()) || isNaN(e.getTime())) return;
+    if (!techMap[name]) techMap[name] = [];
+    techMap[name].push({ start: s, end: e, client: r.client_name || '', install: r.installation_name || '', scope: r.scope || '', status: r.status || '' });
+  });
+
+  const techNames = Object.keys(techMap).sort();
+  if (!techNames.length) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="4" rx="1"/><rect x="3" y="10" width="12" height="4" rx="1"/><rect x="3" y="16" width="15" height="4" rx="1"/></svg></div><div class="empty-title">No Gantt data</div><div class="empty-desc">No valid date ranges found.</div></div>';
+    return;
+  }
+
+  let minDate = new Date(9999, 0), maxDate = new Date(0);
+  Object.values(techMap).flat().forEach(t => { if (t.start < minDate) minDate = new Date(t.start); if (t.end > maxDate) maxDate = new Date(t.end); });
+
+  const dayMs = 864e5;
+  const dayWidth = ganttScale === 'day' ? 26 : ganttScale === 'week' ? 22 : 18;
+  const rowH = 32;
+  const totalDays = Math.ceil((maxDate - minDate) / dayMs) + 2;
+
+  const expanded = {};
+  techNames.forEach((_, i) => expanded[i] = true);
+
+  const wrap = document.createElement('div');
+  wrap.className = 'gantt-wrap';
+
+  // Toolbar
+  const toolbar = document.createElement('div');
+  toolbar.className = 'gantt-toolbar';
+  toolbar.innerHTML = '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">' +
+    '<div class="gantt-range" style="font-family:var(--font-mono);font-size:12px">' + minDate.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) + ' — ' + maxDate.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) + '</div>' +
+    '<div class="gantt-scale" style="display:flex;gap:4px">' +
+    '<button class="gantt-scale-btn'+(ganttScale==='month'?' active':'')+'" onclick="setGanttScale(\'month\')">Month</button>' +
+    '<button class="gantt-scale-btn'+(ganttScale==='week'?' active':'')+'" onclick="setGanttScale(\'week\')">Week</button>' +
+    '<button class="gantt-scale-btn'+(ganttScale==='day'?' active':'')+'" onclick="setGanttScale(\'day\')">Day</button>' +
+    '</div></div><div style="font-size:11px;color:var(--text-2)">' + techNames.length + ' technicians &bull; ' + data.length + ' assignments</div>';
+  wrap.appendChild(toolbar);
+
+  // Legend
+  const legendStatuses = [...new Set(Object.values(techMap).flat().map(t => t.status))].filter(Boolean);
+  const legend = document.createElement('div');
+  legend.className = 'gantt-legend';
+  legend.style.cssText = 'display:flex;flex-wrap:wrap;gap:12px;padding:10px 20px;border-bottom:1px solid var(--border);font-size:11px';
+  legendStatuses.forEach(st => {
+    legend.innerHTML += '<div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;border-radius:3px;background:'+getStatusColor(st)+'"></div>'+esc(st)+'</div>';
+  });
+  legend.innerHTML += '<div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;border-radius:3px;background:#7AB800"></div>Available</div>';
+  wrap.appendChild(legend);
+
+  // Container
+  const gc = document.createElement('div');
+  gc.className = 'gantt-container';
+  gc.style.cssText = 'display:flex;overflow:hidden;max-height:500px';
+
+  // Names panel
+  const namesEl = document.createElement('div');
+  namesEl.className = 'gantt-names';
+  namesEl.style.cssText = 'width:240px;flex-shrink:0;border-right:1px solid var(--border);overflow-y:auto;background:var(--card)';
+
+  // Grid panel
+  const gridEl = document.createElement('div');
+  gridEl.className = 'gantt-grid';
+  gridEl.style.cssText = 'flex:1;overflow:auto;position:relative';
+  const inner = document.createElement('div');
+  inner.style.cssText = 'position:relative;min-width:100%;width:'+(totalDays*dayWidth)+'px';
+
+  // Header
+  const headerEl = document.createElement('div');
+  headerEl.style.cssText = 'display:flex;border-bottom:2px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:5';
+  let curLabel = '', cellStart = 0;
+  for (let i = 0; i <= totalDays; i++) {
+    const dt = new Date(minDate.getTime() + i * dayMs);
+    let label;
+    if (ganttScale === 'week') {
+      const d = dt.getDay() || 7;
+      const thu = new Date(dt); thu.setDate(dt.getDate() + 4 - d);
+      const wn = Math.ceil((((thu - new Date(thu.getFullYear(),0,1)) / dayMs) + 1) / 7);
+      label = 'W' + wn;
+    } else {
+      label = dt.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
+    }
+    if (label !== curLabel) {
+      if (curLabel && i > cellStart) {
+        const cell = document.createElement('div');
+        cell.style.cssText = 'font-size:10px;font-weight:600;color:var(--text-3);text-align:center;border-right:1px solid var(--border);padding:6px 0;flex-shrink:0;width:'+((i-cellStart)*dayWidth)+'px';
+        cell.textContent = curLabel;
+        headerEl.appendChild(cell);
+      }
+      curLabel = label; cellStart = i;
+    }
+  }
+  if (totalDays > cellStart) {
+    const cell = document.createElement('div');
+    cell.style.cssText = 'font-size:10px;font-weight:600;color:var(--text-3);text-align:center;border-right:1px solid var(--border);padding:6px 0;flex-shrink:0;width:'+((totalDays-cellStart)*dayWidth)+'px';
+    cell.textContent = curLabel;
+    headerEl.appendChild(cell);
+  }
+  inner.appendChild(headerEl);
+
+  // Name header
+  const nameHeader = document.createElement('div');
+  nameHeader.style.cssText = 'height:'+rowH+'px;display:flex;align-items:center;padding:0 10px;font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;background:var(--bg);border-bottom:1px solid var(--border)';
+  nameHeader.textContent = 'Technician';
+  namesEl.appendChild(nameHeader);
+
+  // Rows
+  techNames.forEach((techName, ti) => {
+    const tasks = techMap[techName];
+
+    // Name row
+    const nameRow = document.createElement('div');
+    nameRow.style.cssText = 'height:'+rowH+'px;display:flex;align-items:center;gap:4px;padding:0 8px;font-size:12px;font-weight:700;color:var(--text);border-bottom:1px solid var(--border);background:var(--bg-2);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+    nameRow.innerHTML = '<span style="width:16px;flex-shrink:0;font-size:10px;text-align:center" id="gantt-toggle-'+ti+'">▼</span><span style="overflow:hidden;text-overflow:ellipsis" title="'+esc(techName)+'">'+esc(techName)+'</span>';
+    nameRow.onclick = () => {
+      expanded[ti] = !expanded[ti];
+      document.getElementById('gantt-toggle-'+ti).textContent = expanded[ti] ? '▼' : '▶';
+      wrap.querySelectorAll('[data-gantt-parent="'+ti+'"]').forEach(el => el.style.display = expanded[ti] ? '' : 'none');
+    };
+    namesEl.appendChild(nameRow);
+
+    // Grid row (tech level - shows available gaps)
+    const gridRow = document.createElement('div');
+    gridRow.style.cssText = 'height:'+rowH+'px;border-bottom:1px solid var(--border);position:relative';
+
+    // Available gaps
+    const covered = new Array(totalDays).fill(false);
+    tasks.forEach(t => {
+      let a = Math.floor((t.start - minDate) / dayMs);
+      let b = Math.ceil((t.end - minDate) / dayMs);
+      for (let i = Math.max(0, a); i < Math.min(totalDays, b); i++) covered[i] = true;
+    });
+    for (let i = 0; i < totalDays; i++) {
+      if (covered[i]) continue;
+      let j = i;
+      while (j < totalDays && !covered[j]) j++;
+      const bar = document.createElement('div');
+      bar.style.cssText = 'position:absolute;height:22px;top:5px;border-radius:5px;min-width:4px;display:flex;align-items:center;padding:0 6px;font-size:9px;font-weight:600;overflow:hidden;white-space:nowrap;background:#7AB800;color:#0b1220;left:'+(i*dayWidth)+'px;width:'+((j-i)*dayWidth)+'px';
+      bar.textContent = 'Available';
+      gridRow.appendChild(bar);
+      i = j - 1;
+    }
+
+    // Assignment bars
+    tasks.forEach(t => {
+      const off = Math.max(0, (t.start - minDate) / dayMs);
+      const dur = Math.max(1, (t.end - t.start) / dayMs);
+      const bar = document.createElement('div');
+      bar.style.cssText = 'position:absolute;height:22px;top:5px;border-radius:5px;min-width:4px;display:flex;align-items:center;padding:0 6px;font-size:9px;font-weight:600;color:#fff;overflow:hidden;white-space:nowrap;z-index:2;cursor:pointer;left:'+(off*dayWidth)+'px;width:'+(dur*dayWidth)+'px;background:'+getStatusColor(t.status);
+      bar.textContent = t.client ? t.client + (t.scope ? ' - ' + t.scope : '') : t.install;
+      bar.title = techName + '\n' + (t.client||'') + '\n' + (t.install||'') + '\n' + (t.scope||'') + '\n' + t.start.toLocaleDateString('en-GB') + ' → ' + t.end.toLocaleDateString('en-GB') + '\n' + t.status;
+      gridRow.appendChild(bar);
+    });
+
+    inner.appendChild(gridRow);
+
+    // Sub-rows per client
+    const byClient = {};
+    tasks.forEach(t => { const c = t.client || '(no client)'; if (!byClient[c]) byClient[c] = []; byClient[c].push(t); });
+    Object.entries(byClient).sort().forEach(([client, clientTasks]) => {
+      const subName = document.createElement('div');
+      subName.dataset.ganttParent = ti;
+      subName.style.cssText = 'height:'+rowH+'px;display:flex;align-items:center;padding:0 8px 0 28px;font-size:11px;font-weight:500;color:var(--text-2);border-bottom:1px solid var(--border);white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+      subName.textContent = client;
+      namesEl.appendChild(subName);
+
+      const subGrid = document.createElement('div');
+      subGrid.dataset.ganttParent = ti;
+      subGrid.style.cssText = 'height:'+rowH+'px;border-bottom:1px solid var(--border);position:relative';
+      clientTasks.forEach(t => {
+        const off = Math.max(0, (t.start - minDate) / dayMs);
+        const dur = Math.max(1, (t.end - t.start) / dayMs);
+        const bar = document.createElement('div');
+        bar.style.cssText = 'position:absolute;height:22px;top:5px;border-radius:5px;min-width:4px;display:flex;align-items:center;padding:0 6px;font-size:9px;font-weight:600;color:#fff;overflow:hidden;white-space:nowrap;z-index:2;left:'+(off*dayWidth)+'px;width:'+(dur*dayWidth)+'px;background:'+getStatusColor(t.status);
+        bar.textContent = t.scope || t.install;
+        bar.title = t.scope + '\n' + t.start.toLocaleDateString('en-GB') + ' → ' + t.end.toLocaleDateString('en-GB');
+        subGrid.appendChild(bar);
+      });
+      inner.appendChild(subGrid);
+    });
+  });
+
+  // Today line
+  const today = new Date();
+  if (today >= minDate && today <= maxDate) {
+    const todayOff = (today - minDate) / dayMs;
+    const todayLine = document.createElement('div');
+    todayLine.style.cssText = 'position:absolute;width:2px;background:var(--danger);z-index:4;pointer-events:none;left:'+(todayOff*dayWidth)+'px;top:0;bottom:0';
+    const todayLabel = document.createElement('div');
+    todayLabel.style.cssText = 'position:absolute;top:-16px;left:50%;transform:translateX(-50%);font-size:9px;font-weight:700;color:var(--danger);white-space:nowrap';
+    todayLabel.textContent = 'Today';
+    todayLine.appendChild(todayLabel);
+    inner.appendChild(todayLine);
+  }
+
+  gridEl.appendChild(inner);
+  gc.appendChild(namesEl);
+  gc.appendChild(gridEl);
+  wrap.appendChild(gc);
+
+  // Sync scroll
+  namesEl.addEventListener('scroll', () => { gridEl.scrollTop = namesEl.scrollTop; });
+  gridEl.addEventListener('scroll', () => { namesEl.scrollTop = gridEl.scrollTop; });
+
+  container.appendChild(wrap);
+
+  // Scroll to today
+  if (today >= minDate && today <= maxDate) {
+    const todayOff = (today - minDate) / dayMs * dayWidth;
+    gridEl.scrollLeft = Math.max(0, todayOff - gridEl.clientWidth / 2);
+  }
 }
 
 // ─── Close modals on overlay click ───
