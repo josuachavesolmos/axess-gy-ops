@@ -344,8 +344,14 @@ textarea.form-control{min-height:80px;resize:vertical}
         <button class="filter-reset" onclick="resetFilters('equipment')">Clear All</button>
       </div>
       <div class="kpi-row" id="kpi-equipment"></div>
-      <div id="table-equipment"><div class="loading-spinner"><div class="spinner"></div>Loading equipment data...</div></div>
-      <div class="chart-grid" id="charts-equipment" style="margin-top:24px"></div>
+      <div class="view-toggle">
+        <button class="view-btn active" id="evbtn-gantt" onclick="setEquipmentView('gantt')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><rect x="3" y="4" width="18" height="4" rx="1"/><rect x="3" y="10" width="12" height="4" rx="1"/><rect x="3" y="16" width="15" height="4" rx="1"/></svg>Gantt Calendar</button>
+        <button class="view-btn" id="evbtn-table" onclick="setEquipmentView('table')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="3" x2="9" y2="21"/></svg>Inventory</button>
+        <button class="view-btn" id="evbtn-charts" onclick="setEquipmentView('charts')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Charts</button>
+      </div>
+      <div id="equipment-gantt-view"></div>
+      <div id="table-equipment" style="display:none"><div class="loading-spinner"><div class="spinner"></div>Loading equipment data...</div></div>
+      <div class="chart-grid" id="charts-equipment" style="display:none;margin-top:24px"></div>
     </div>
 
     <!-- ═══════ QUOTES TAB ═══════ -->
@@ -532,6 +538,7 @@ const lookups = { clients: [], installations: [], classifications: [], categorie
 const state = {
   personnel: { raw: [], filtered: [] },
   equipment: { raw: [], filtered: [] },
+  equipAssign: { raw: [] },
   quotes: { raw: [], filtered: [] },
   projects: { raw: [], filtered: [] }
 };
@@ -686,6 +693,20 @@ async function loadEquipment() {
   state.equipment.filtered = [...state.equipment.raw];
   document.getElementById('badge-equipment').textContent = state.equipment.raw.length;
   renderEquipment();
+}
+
+async function loadEquipmentAssignments() {
+  const { data, error } = await sb.from('equipment_assignments')
+    .select('*, equipment(description, equipment_id_code), clients(name), installations(name)')
+    .order('start_date', { ascending: false });
+  if (error) return;
+  state.equipAssign.raw = (data || []).map(r => ({
+    ...r,
+    equipment_name: r.equipment?.description || '',
+    equipment_code: r.equipment?.equipment_id_code || '',
+    client_name: r.clients?.name || '',
+    installation_name: r.installations?.name || ''
+  }));
 }
 
 async function loadQuotes() {
@@ -907,6 +928,9 @@ function getStatusColor(status) {
 
 // ─── EQUIPMENT RENDERING ───
 function renderEquipment() {
+  // Render gantt if in gantt view
+  if (equipmentView === 'gantt') renderEquipmentGantt();
+
   const d = state.equipment.filtered;
   const total = d.length;
   const active = d.filter(r => r.active).length;
@@ -1478,15 +1502,39 @@ async function importEquipmentRows(rows) {
 
       const categoryId = catName ? await getOrCreateLookup('equipment_categories', 'value', catName) : null;
 
-      const { error } = await sb.from('equipment').insert({
-        description: desc,
-        equipment_id_code: null,
-        category_id: categoryId,
-        calibration_due_date: calibDate,
-        calibration_status: calibStatus,
-        active: true
-      });
-      if (error) { errors.push('Row '+(i+1)+': '+error.message); skipped++; } else imported++;
+      // Upsert equipment
+      let eqId;
+      const { data: existEq } = await sb.from('equipment').select('id').eq('description', desc).maybeSingle();
+      if (existEq) { eqId = existEq.id; }
+      else {
+        const { data: newEq, error: eqErr } = await sb.from('equipment').insert({
+          description: desc, equipment_id_code: null, category_id: categoryId,
+          calibration_due_date: calibDate, calibration_status: calibStatus, active: true
+        }).select('id').single();
+        if (eqErr) { errors.push('Row '+(i+1)+': '+eqErr.message); skipped++; continue; }
+        eqId = newEq.id;
+      }
+
+      // Create assignment if dates exist
+      const startDate = excelDateToISO(row['Start Date'] || row['Start']);
+      const endDate = excelDateToISO(row['End Date'] || row['End']);
+      const clientName = (row['Client'] || '').toString().trim();
+      const installName = (row['Installation'] || '').toString().trim();
+      const statusRaw = (row['Status'] || '').toString().trim();
+      const workOrder = (row['Work Order'] || '').toString().trim();
+      const scope = (row['Scope'] || '').toString().trim();
+
+      if (startDate) {
+        const clientId = clientName ? await getOrCreateLookup('clients', 'name', clientName) : null;
+        const installId = installName ? await getOrCreateLookup('installations', 'name', installName) : null;
+        const { error: assignErr } = await sb.from('equipment_assignments').insert({
+          equipment_id: eqId, start_date: startDate, end_date: endDate,
+          client_id: clientId, installation_id: installId,
+          status: statusRaw || 'Deployed', work_order: workOrder || null, scope: scope || null
+        });
+        if (assignErr) errors.push('Row '+(i+1)+' assign: '+assignErr.message);
+      }
+      imported++;
     } catch (rowErr) {
       errors.push('Row '+(i+1)+': '+rowErr.message);
       skipped++;
@@ -1497,6 +1545,7 @@ async function importEquipmentRows(rows) {
   toast('Imported ' + imported + ' records' + (skipped ? ', ' + skipped + ' skipped' : ''), imported ? 'success' : 'error');
   await loadLookups();
   await loadEquipment();
+  await loadEquipmentAssignments();
 }
 
 // ─── PDF Upload ───
@@ -1522,7 +1571,9 @@ async function uploadCertificate(equipmentId) {
 
 // ─── Gantt Chart ───
 let personnelView = 'gantt';
+let equipmentView = 'gantt';
 let ganttScale = 'month';
+let eqGanttScale = 'month';
 
 function setPersonnelView(v) {
   personnelView = v;
@@ -1538,6 +1589,169 @@ function setPersonnelView(v) {
 function setGanttScale(scale) {
   ganttScale = scale;
   renderGantt(state.personnel.filtered, 'personnel-gantt-view');
+}
+
+function setEquipmentView(v) {
+  equipmentView = v;
+  document.getElementById('evbtn-gantt').classList.toggle('active', v === 'gantt');
+  document.getElementById('evbtn-table').classList.toggle('active', v === 'table');
+  document.getElementById('evbtn-charts').classList.toggle('active', v === 'charts');
+  document.getElementById('equipment-gantt-view').style.display = v === 'gantt' ? '' : 'none';
+  document.getElementById('table-equipment').style.display = v === 'table' ? '' : 'none';
+  document.getElementById('charts-equipment').style.display = v === 'charts' ? '' : 'none';
+  if (v === 'gantt') renderEquipmentGantt();
+}
+
+function setEqGanttScale(scale) {
+  eqGanttScale = scale;
+  renderEquipmentGantt();
+}
+
+function renderEquipmentGantt() {
+  const container = document.getElementById('equipment-gantt-view');
+  container.innerHTML = '';
+  const data = state.equipAssign.raw;
+
+  if (!data.length) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></div><div class="empty-title">No equipment assignments</div><div class="empty-desc">Import an Equipment Excel with Start/End dates to see the Gantt, or switch to Inventory view.</div></div>';
+    return;
+  }
+
+  // Group by equipment name
+  const equipMap = {};
+  data.forEach(r => {
+    const name = r.equipment_name || '(unnamed)';
+    if (!r.start_date) return;
+    const s = new Date(r.start_date);
+    const e = r.end_date ? new Date(r.end_date) : new Date(s.getTime() + 14 * 864e5);
+    if (isNaN(s.getTime()) || isNaN(e.getTime())) return;
+    if (!equipMap[name]) equipMap[name] = [];
+    equipMap[name].push({ start: s, end: e, client: r.client_name || '', install: r.installation_name || '', scope: r.scope || '', status: r.status || '', wo: r.work_order || '' });
+  });
+
+  const equipNames = Object.keys(equipMap).sort();
+  if (!equipNames.length) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-title">No valid date ranges</div></div>';
+    return;
+  }
+
+  let minDate = new Date(9999, 0), maxDate = new Date(0);
+  Object.values(equipMap).flat().forEach(t => { if (t.start < minDate) minDate = new Date(t.start); if (t.end > maxDate) maxDate = new Date(t.end); });
+
+  const dayMs = 864e5;
+  const scale = eqGanttScale;
+  const dayWidth = scale === 'day' ? 26 : scale === 'week' ? 22 : 18;
+  const rowH = 32;
+  const totalDays = Math.ceil((maxDate - minDate) / dayMs) + 2;
+
+  const wrap = document.createElement('div');
+  wrap.className = 'gantt-wrap';
+
+  // Toolbar
+  const toolbar = document.createElement('div');
+  toolbar.className = 'gantt-toolbar';
+  toolbar.innerHTML = '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">' +
+    '<div style="font-family:var(--font-mono);font-size:12px;font-weight:600">' + minDate.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) + ' — ' + maxDate.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) + '</div>' +
+    '<div style="display:flex;gap:4px">' +
+    '<button class="gantt-scale-btn'+(scale==='month'?' active':'')+'" onclick="setEqGanttScale(\'month\')">Month</button>' +
+    '<button class="gantt-scale-btn'+(scale==='week'?' active':'')+'" onclick="setEqGanttScale(\'week\')">Week</button>' +
+    '<button class="gantt-scale-btn'+(scale==='day'?' active':'')+'" onclick="setEqGanttScale(\'day\')">Day</button>' +
+    '</div></div><div style="font-size:11px;color:var(--text-2)">' + equipNames.length + ' equipment &bull; ' + data.length + ' assignments</div>';
+  wrap.appendChild(toolbar);
+
+  const gc = document.createElement('div');
+  gc.style.cssText = 'display:flex;overflow:hidden;max-height:500px';
+
+  const namesEl = document.createElement('div');
+  namesEl.style.cssText = 'width:260px;flex-shrink:0;border-right:1px solid var(--border);overflow-y:auto;background:var(--card)';
+
+  const gridEl = document.createElement('div');
+  gridEl.style.cssText = 'flex:1;overflow:auto;position:relative';
+  const inner = document.createElement('div');
+  inner.style.cssText = 'position:relative;min-width:100%;width:'+(totalDays*dayWidth)+'px';
+
+  // Header (reuse same logic as personnel gantt)
+  const cellStyle = 'font-size:10px;font-weight:600;color:var(--text-3);text-align:center;border-right:1px solid var(--border);padding:6px 0;flex-shrink:0';
+  if (scale === 'day') {
+    const hw = document.createElement('div');
+    hw.style.cssText = 'display:flex;flex-direction:column;border-bottom:2px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:5';
+    const mRow = document.createElement('div'); mRow.style.cssText = 'display:flex';
+    const dRow = document.createElement('div'); dRow.style.cssText = 'display:flex';
+    let cm = '', ms = 0;
+    for (let i = 0; i <= totalDays; i++) {
+      const dt = new Date(minDate.getTime() + i * dayMs);
+      const mo = i < totalDays ? dt.toLocaleDateString('en-GB',{month:'short',year:'numeric'}) : '';
+      if (mo !== cm) { if (cm && i > ms) { const c = document.createElement('div'); c.style.cssText = cellStyle+';width:'+((i-ms)*dayWidth)+'px;font-weight:700;border-bottom:1px solid var(--border)'; c.textContent = cm; mRow.appendChild(c); } cm = mo; ms = i; }
+      if (i < totalDays) { const dc = document.createElement('div'); const isWe = dt.getDay()===0||dt.getDay()===6; dc.style.cssText = cellStyle+';width:'+dayWidth+'px;font-size:9px'+(isWe?';color:var(--danger);opacity:0.7':''); dc.textContent = String(dt.getDate()); dRow.appendChild(dc); }
+    }
+    if (cm && totalDays > ms) { const c = document.createElement('div'); c.style.cssText = cellStyle+';width:'+((totalDays-ms)*dayWidth)+'px;font-weight:700;border-bottom:1px solid var(--border)'; c.textContent = cm; mRow.appendChild(c); }
+    hw.appendChild(mRow); hw.appendChild(dRow); inner.appendChild(hw);
+  } else {
+    const hEl = document.createElement('div');
+    hEl.style.cssText = 'display:flex;border-bottom:2px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:5';
+    let cl = '', cs = 0;
+    for (let i = 0; i <= totalDays; i++) {
+      const dt = new Date(minDate.getTime() + i * dayMs);
+      let lb; if (scale==='week') { const d=dt.getDay()||7; const th=new Date(dt);th.setDate(dt.getDate()+4-d); const wn=Math.ceil((((th-new Date(th.getFullYear(),0,1))/dayMs)+1)/7); lb='W'+wn; } else { lb=dt.toLocaleDateString('en-GB',{month:'short',year:'numeric'}); }
+      if (lb !== cl) { if (cl && i > cs) { const c=document.createElement('div'); c.style.cssText=cellStyle+';width:'+((i-cs)*dayWidth)+'px'; c.textContent=cl; hEl.appendChild(c); } cl=lb; cs=i; }
+    }
+    if (totalDays > cs) { const c=document.createElement('div'); c.style.cssText=cellStyle+';width:'+((totalDays-cs)*dayWidth)+'px'; c.textContent=cl; hEl.appendChild(c); }
+    inner.appendChild(hEl);
+  }
+
+  // Name header
+  const nh = document.createElement('div');
+  nh.style.cssText = 'height:'+rowH+'px;display:flex;align-items:center;padding:0 10px;font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;background:var(--bg);border-bottom:1px solid var(--border)';
+  nh.textContent = 'Equipment';
+  namesEl.appendChild(nh);
+
+  // Rows
+  equipNames.forEach(eqName => {
+    const tasks = equipMap[eqName];
+    const nameRow = document.createElement('div');
+    nameRow.style.cssText = 'height:'+rowH+'px;display:flex;align-items:center;padding:0 10px;font-size:11.5px;font-weight:600;color:var(--text);border-bottom:1px solid var(--border);white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+    nameRow.textContent = eqName;
+    nameRow.title = eqName;
+    namesEl.appendChild(nameRow);
+
+    const gridRow = document.createElement('div');
+    gridRow.style.cssText = 'height:'+rowH+'px;border-bottom:1px solid var(--border);position:relative';
+    tasks.forEach(t => {
+      const off = Math.max(0, (t.start - minDate) / dayMs);
+      const dur = Math.max(1, (t.end - t.start) / dayMs);
+      const bar = document.createElement('div');
+      bar.style.cssText = 'position:absolute;height:22px;top:5px;border-radius:5px;min-width:4px;display:flex;align-items:center;padding:0 6px;font-size:9px;font-weight:600;color:#fff;overflow:hidden;white-space:nowrap;z-index:2;cursor:pointer;left:'+(off*dayWidth)+'px;width:'+(dur*dayWidth)+'px;background:'+getStatusColor(t.status);
+      bar.textContent = t.client + (t.scope ? ' - ' + t.scope : '');
+      bar.title = eqName + '\n' + (t.client||'(no client)') + (t.scope ? '\nScope: ' + t.scope : '') + '\n' + (t.install||'') + (t.wo ? '\nWO: ' + t.wo : '') + '\n' + t.start.toLocaleDateString('en-GB') + ' → ' + t.end.toLocaleDateString('en-GB') + '\n' + t.status;
+      gridRow.appendChild(bar);
+    });
+    inner.appendChild(gridRow);
+  });
+
+  // Today line
+  const today = new Date();
+  if (today >= minDate && today <= maxDate) {
+    const todayOff = (today - minDate) / dayMs;
+    const tl = document.createElement('div');
+    tl.style.cssText = 'position:absolute;width:2px;background:var(--danger);z-index:4;pointer-events:none;left:'+(todayOff*dayWidth)+'px;top:0;bottom:0';
+    const tlLabel = document.createElement('div');
+    tlLabel.style.cssText = 'position:absolute;top:-16px;left:50%;transform:translateX(-50%);font-size:9px;font-weight:700;color:var(--danger);white-space:nowrap';
+    tlLabel.textContent = 'Today';
+    tl.appendChild(tlLabel);
+    inner.appendChild(tl);
+  }
+
+  gridEl.appendChild(inner);
+  gc.appendChild(namesEl);
+  gc.appendChild(gridEl);
+  wrap.appendChild(gc);
+  namesEl.addEventListener('scroll', () => { gridEl.scrollTop = namesEl.scrollTop; });
+  gridEl.addEventListener('scroll', () => { namesEl.scrollTop = gridEl.scrollTop; });
+  container.appendChild(wrap);
+  if (today >= minDate && today <= maxDate) {
+    const todayOff = (today - minDate) / dayMs * dayWidth;
+    gridEl.scrollLeft = Math.max(0, todayOff - gridEl.clientWidth / 2);
+  }
 }
 
 function renderGantt(data, containerId) {
@@ -1819,7 +2033,7 @@ document.addEventListener('DOMContentLoaded', async function() {
   updateTopActions();
   try {
     await loadLookups();
-    await Promise.all([loadPersonnel(), loadEquipment(), loadQuotes(), loadProjects()]);
+    await Promise.all([loadPersonnel(), loadEquipment(), loadEquipmentAssignments(), loadQuotes(), loadProjects()]);
     toast('Connected to Supabase — data loaded', 'success');
   } catch (err) {
     toast('Connection error: ' + err.message, 'error');
