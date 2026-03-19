@@ -1197,24 +1197,32 @@ function excelDateToISO(v) {
 }
 
 async function importExcel(input, type) {
-  const file = input.files[0];
-  if (!file) return;
-  input.value = '';
-  toast('Reading ' + file.name + '...', 'info');
+  try {
+    const file = input.files[0];
+    if (!file) return;
+    input.value = '';
+    toast('Reading ' + file.name + '...', 'info');
 
-  const data = await file.arrayBuffer();
-  const wb = XLSX.read(data);
+    const data = await file.arrayBuffer();
+    const wb = XLSX.read(data);
+    toast('Sheets found: ' + wb.SheetNames.join(', '), 'info');
 
-  if (type === 'personnel') {
-    const sheetName = wb.SheetNames.find(s => s.toLowerCase().includes('planner') && !s.toLowerCase().includes('equipment')) || wb.SheetNames[0];
-    const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName]);
-    if (!rows.length) { toast('No data found in sheet "' + sheetName + '"', 'error'); return; }
-    await importPersonnelRows(rows);
-  } else if (type === 'equipment') {
-    const sheetName = wb.SheetNames.find(s => s.toLowerCase().includes('equipment')) || wb.SheetNames[0];
-    const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName]);
-    if (!rows.length) { toast('No data found in sheet "' + sheetName + '"', 'error'); return; }
-    await importEquipmentRows(rows);
+    if (type === 'personnel') {
+      const sheetName = wb.SheetNames.find(s => s.toLowerCase().includes('planner') && !s.toLowerCase().includes('equipment')) || wb.SheetNames[0];
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName]);
+      toast('Sheet "' + sheetName + '": ' + rows.length + ' rows found', 'info');
+      if (!rows.length) { toast('No data found', 'error'); return; }
+      await importPersonnelRows(rows);
+    } else if (type === 'equipment') {
+      const sheetName = wb.SheetNames.find(s => s.toLowerCase().includes('equipment')) || wb.SheetNames[0];
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName]);
+      toast('Sheet "' + sheetName + '": ' + rows.length + ' rows found', 'info');
+      if (!rows.length) { toast('No data found', 'error'); return; }
+      await importEquipmentRows(rows);
+    }
+  } catch (err) {
+    toast('Import error: ' + err.message, 'error');
+    console.error('Import error:', err);
   }
 }
 
@@ -1229,93 +1237,115 @@ async function getOrCreateLookup(table, field, value) {
 }
 
 async function importPersonnelRows(rows) {
-  let imported = 0, skipped = 0;
+  let imported = 0, skipped = 0, errors = [];
   toast('Importing ' + rows.length + ' personnel records...', 'info');
 
-  for (const row of rows) {
-    const name = (row['Technician Name'] || row['Name'] || '').toString().trim();
-    if (!name) { skipped++; continue; }
+  for (let i = 0; i < rows.length; i++) {
+    try {
+      const row = rows[i];
+      const name = (row['Technician Name'] || row['Name'] || '').toString().trim();
+      if (!name) { skipped++; continue; }
 
-    const competency = (row['Competency'] || row['Designation'] || '').toString().trim();
-    const startDate = excelDateToISO(row['Start Date'] || row['Start']);
-    const endDate = excelDateToISO(row['End Date'] || row['End']);
-    const durationDays = parseInt(row['Duration (days)'] || row['Duration']) || null;
-    const status = (row['Status'] || 'Planned').toString().trim();
-    const workOrder = (row['Work Order'] || row['WO'] || '').toString().trim();
-    const scope = (row['Scope'] || '').toString().trim();
-    const clientName = (row['Client'] || '').toString().trim();
-    const installName = (row['Installation'] || '').toString().trim();
-    const classifName = (row['Support Classification'] || row['Classification'] || '').toString().trim();
+      const competency = (row['Competency'] || row['Designation'] || '').toString().trim();
+      const startDate = excelDateToISO(row['Start Date'] || row['Start']);
+      const endDate = excelDateToISO(row['End Date'] || row['End']);
+      const status = (row['Status'] || 'Planned').toString().trim();
+      const workOrder = (row['Work Order'] || row['WO'] || '').toString().trim();
+      const scope = (row['Scope'] || '').toString().trim();
+      const clientName = (row['Client'] || '').toString().trim();
+      const installName = (row['Installation'] || '').toString().trim();
+      const classifName = (row['Support Classification'] || row['Classification'] || '').toString().trim();
 
-    // Get or create technician
-    let techId;
-    const { data: tech } = await sb.from('technicians').select('id').eq('name', name).maybeSingle();
-    if (tech) { techId = tech.id; }
-    else {
-      const { data: newTech } = await sb.from('technicians').insert({ name, competency }).select('id').single();
-      if (newTech) techId = newTech.id; else { skipped++; continue; }
+      // Calculate duration from dates
+      let durationDays = null;
+      if (startDate && endDate) {
+        durationDays = Math.round((new Date(endDate) - new Date(startDate)) / 864e5);
+      }
+
+      // Get or create technician
+      let techId;
+      const { data: tech, error: techErr } = await sb.from('technicians').select('id').eq('name', name).maybeSingle();
+      if (techErr) { errors.push('Row '+(i+1)+' tech lookup: '+techErr.message); skipped++; continue; }
+      if (tech) { techId = tech.id; }
+      else {
+        const { data: newTech, error: newTechErr } = await sb.from('technicians').insert({ name, competency }).select('id').single();
+        if (newTechErr) { errors.push('Row '+(i+1)+' tech create: '+newTechErr.message); skipped++; continue; }
+        techId = newTech.id;
+      }
+
+      const clientId = clientName ? await getOrCreateLookup('clients', 'name', clientName) : null;
+      const installId = installName ? await getOrCreateLookup('installations', 'name', installName) : null;
+      const classifId = classifName ? await getOrCreateLookup('support_classifications', 'value', classifName) : null;
+
+      const { error } = await sb.from('personnel_assignments').insert({
+        technician_id: techId,
+        start_date: startDate || new Date().toISOString().split('T')[0],
+        end_date: endDate,
+        duration_days: durationDays,
+        status: status,
+        work_order: workOrder || null,
+        scope: scope || null,
+        client_id: clientId,
+        installation_id: installId,
+        support_classification_id: classifId
+      });
+      if (error) { errors.push('Row '+(i+1)+': '+error.message); skipped++; } else imported++;
+
+      // Progress update every 50 rows
+      if ((i+1) % 50 === 0) toast('Progress: ' + (i+1) + '/' + rows.length, 'info');
+    } catch (rowErr) {
+      errors.push('Row '+(i+1)+': '+rowErr.message);
+      skipped++;
     }
-
-    const clientId = clientName ? await getOrCreateLookup('clients', 'name', clientName) : null;
-    const installId = installName ? await getOrCreateLookup('installations', 'name', installName) : null;
-    const classifId = classifName ? await getOrCreateLookup('support_classifications', 'value', classifName) : null;
-
-    const { error } = await sb.from('personnel_assignments').insert({
-      technician_id: techId,
-      start_date: startDate || new Date().toISOString().split('T')[0],
-      end_date: endDate,
-      duration_days: durationDays,
-      status: status,
-      work_order: workOrder || null,
-      scope: scope || null,
-      client_id: clientId,
-      installation_id: installId,
-      support_classification_id: classifId
-    });
-    if (error) skipped++; else imported++;
   }
 
+  if (errors.length > 0) console.error('Import errors:', errors);
   toast('Imported ' + imported + ' records' + (skipped ? ', ' + skipped + ' skipped' : ''), imported ? 'success' : 'error');
   await loadLookups();
   await loadPersonnel();
 }
 
 async function importEquipmentRows(rows) {
-  let imported = 0, skipped = 0;
+  let imported = 0, skipped = 0, errors = [];
   toast('Importing ' + rows.length + ' equipment records...', 'info');
 
-  for (const row of rows) {
-    const desc = (row['Description & ID'] || row['Description'] || row['Equipment Name'] || row['Equipment'] || '').toString().trim();
-    if (!desc) { skipped++; continue; }
+  for (let i = 0; i < rows.length; i++) {
+    try {
+      const row = rows[i];
+      const desc = (row['Description & ID'] || row['Description'] || row['Equipment Name'] || row['Equipment'] || '').toString().trim();
+      if (!desc) { skipped++; continue; }
 
-    const idCode = (row['Equipment ID'] || row['ID'] || '').toString().trim();
-    const catName = (row['Category'] || row['Equipment type'] || '').toString().trim();
-    const calibDate = excelDateToISO(row['Calibration End Date'] || row['Calibration Due Date'] || row['Calibration due date']);
-    const statusRaw = (row['Status'] || row['Equipment status'] || '').toString().trim();
+      const catName = (row['Category'] || row['Equipment type'] || row['Scope'] || '').toString().trim();
+      const calibDate = excelDateToISO(row['Calibration End Date'] || row['Calibration Due Date'] || row['Calibration due date']);
 
-    let calibStatus = 'N/A';
-    if (calibDate) {
-      const d = new Date(calibDate);
-      const now = new Date();
-      const diff = (d - now) / 864e5;
-      if (diff < 0) calibStatus = 'Expired';
-      else if (diff < 90) calibStatus = 'Due Soon';
-      else calibStatus = 'Valid';
+      let calibStatus = 'N/A';
+      if (calibDate) {
+        const d = new Date(calibDate);
+        const now = new Date();
+        const diff = (d - now) / 864e5;
+        if (diff < 0) calibStatus = 'Expired';
+        else if (diff < 90) calibStatus = 'Due Soon';
+        else calibStatus = 'Valid';
+      }
+
+      const categoryId = catName ? await getOrCreateLookup('equipment_categories', 'value', catName) : null;
+
+      const { error } = await sb.from('equipment').insert({
+        description: desc,
+        equipment_id_code: null,
+        category_id: categoryId,
+        calibration_due_date: calibDate,
+        calibration_status: calibStatus,
+        active: true
+      });
+      if (error) { errors.push('Row '+(i+1)+': '+error.message); skipped++; } else imported++;
+    } catch (rowErr) {
+      errors.push('Row '+(i+1)+': '+rowErr.message);
+      skipped++;
     }
-
-    const categoryId = catName ? await getOrCreateLookup('equipment_categories', 'value', catName) : null;
-
-    const { error } = await sb.from('equipment').insert({
-      description: desc,
-      equipment_id_code: idCode || null,
-      category_id: categoryId,
-      calibration_due_date: calibDate,
-      calibration_status: calibStatus,
-      active: true
-    });
-    if (error) skipped++; else imported++;
   }
 
+  if (errors.length > 0) console.error('Import errors:', errors);
   toast('Imported ' + imported + ' records' + (skipped ? ', ' + skipped + ' skipped' : ''), imported ? 'success' : 'error');
   await loadLookups();
   await loadEquipment();
