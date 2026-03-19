@@ -1617,37 +1617,83 @@ function renderGantt(data, containerId) {
   inner.style.cssText = 'position:relative;min-width:100%;width:'+(totalDays*dayWidth)+'px';
 
   // Header
-  const headerEl = document.createElement('div');
-  headerEl.style.cssText = 'display:flex;border-bottom:2px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:5';
-  let curLabel = '', cellStart = 0;
-  for (let i = 0; i <= totalDays; i++) {
-    const dt = new Date(minDate.getTime() + i * dayMs);
-    let label;
-    if (ganttScale === 'week') {
-      const d = dt.getDay() || 7;
-      const thu = new Date(dt); thu.setDate(dt.getDate() + 4 - d);
-      const wn = Math.ceil((((thu - new Date(thu.getFullYear(),0,1)) / dayMs) + 1) / 7);
-      label = 'W' + wn;
-    } else {
-      label = dt.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
-    }
-    if (label !== curLabel) {
-      if (curLabel && i > cellStart) {
-        const cell = document.createElement('div');
-        cell.style.cssText = 'font-size:10px;font-weight:600;color:var(--text-3);text-align:center;border-right:1px solid var(--border);padding:6px 0;flex-shrink:0;width:'+((i-cellStart)*dayWidth)+'px';
-        cell.textContent = curLabel;
-        headerEl.appendChild(cell);
+  const cellStyle = 'font-size:10px;font-weight:600;color:var(--text-3);text-align:center;border-right:1px solid var(--border);padding:6px 0;flex-shrink:0';
+
+  if (ganttScale === 'day') {
+    // Dual-row header: months on top, day numbers below
+    const headerWrap = document.createElement('div');
+    headerWrap.style.cssText = 'display:flex;flex-direction:column;border-bottom:2px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:5';
+
+    const monthRow = document.createElement('div');
+    monthRow.style.cssText = 'display:flex';
+    const dayRow = document.createElement('div');
+    dayRow.style.cssText = 'display:flex';
+
+    let curMonth = '', monthStart = 0;
+    for (let i = 0; i <= totalDays; i++) {
+      const dt = new Date(minDate.getTime() + i * dayMs);
+      const mo = i < totalDays ? dt.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }) : '';
+      if (mo !== curMonth) {
+        if (curMonth && i > monthStart) {
+          const cell = document.createElement('div');
+          cell.style.cssText = cellStyle + ';width:'+((i-monthStart)*dayWidth)+'px;font-weight:700;border-bottom:1px solid var(--border)';
+          cell.textContent = curMonth;
+          monthRow.appendChild(cell);
+        }
+        curMonth = mo; monthStart = i;
       }
-      curLabel = label; cellStart = i;
+      if (i < totalDays) {
+        const dayCell = document.createElement('div');
+        const isWeekend = dt.getDay() === 0 || dt.getDay() === 6;
+        dayCell.style.cssText = cellStyle + ';width:'+dayWidth+'px;font-size:9px' + (isWeekend ? ';color:var(--danger);opacity:0.7' : '');
+        dayCell.textContent = String(dt.getDate());
+        dayRow.appendChild(dayCell);
+      }
     }
+    if (curMonth && totalDays > monthStart) {
+      const cell = document.createElement('div');
+      cell.style.cssText = cellStyle + ';width:'+((totalDays-monthStart)*dayWidth)+'px;font-weight:700;border-bottom:1px solid var(--border)';
+      cell.textContent = curMonth;
+      monthRow.appendChild(cell);
+    }
+
+    headerWrap.appendChild(monthRow);
+    headerWrap.appendChild(dayRow);
+    inner.appendChild(headerWrap);
+  } else {
+    // Single-row header for month/week scale
+    const headerEl = document.createElement('div');
+    headerEl.style.cssText = 'display:flex;border-bottom:2px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:5';
+    let curLabel = '', cellStart = 0;
+    for (let i = 0; i <= totalDays; i++) {
+      const dt = new Date(minDate.getTime() + i * dayMs);
+      let label;
+      if (ganttScale === 'week') {
+        const d = dt.getDay() || 7;
+        const thu = new Date(dt); thu.setDate(dt.getDate() + 4 - d);
+        const wn = Math.ceil((((thu - new Date(thu.getFullYear(),0,1)) / dayMs) + 1) / 7);
+        label = 'W' + wn;
+      } else {
+        label = dt.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
+      }
+      if (label !== curLabel) {
+        if (curLabel && i > cellStart) {
+          const cell = document.createElement('div');
+          cell.style.cssText = cellStyle + ';width:'+((i-cellStart)*dayWidth)+'px';
+          cell.textContent = curLabel;
+          headerEl.appendChild(cell);
+        }
+        curLabel = label; cellStart = i;
+      }
+    }
+    if (totalDays > cellStart) {
+      const cell = document.createElement('div');
+      cell.style.cssText = cellStyle + ';width:'+((totalDays-cellStart)*dayWidth)+'px';
+      cell.textContent = curLabel;
+      headerEl.appendChild(cell);
+    }
+    inner.appendChild(headerEl);
   }
-  if (totalDays > cellStart) {
-    const cell = document.createElement('div');
-    cell.style.cssText = 'font-size:10px;font-weight:600;color:var(--text-3);text-align:center;border-right:1px solid var(--border);padding:6px 0;flex-shrink:0;width:'+((totalDays-cellStart)*dayWidth)+'px';
-    cell.textContent = curLabel;
-    headerEl.appendChild(cell);
-  }
-  inner.appendChild(headerEl);
 
   // Name header
   const nameHeader = document.createElement('div');
@@ -1688,6 +1734,7 @@ function renderGantt(data, containerId) {
       const bar = document.createElement('div');
       bar.style.cssText = 'position:absolute;height:22px;top:5px;border-radius:5px;min-width:4px;display:flex;align-items:center;padding:0 6px;font-size:9px;font-weight:600;overflow:hidden;white-space:nowrap;background:#7AB800;color:#0b1220;left:'+(i*dayWidth)+'px;width:'+((j-i)*dayWidth)+'px';
       bar.textContent = 'Available';
+      bar.title = techName + '\nAvailable\n' + new Date(minDate.getTime()+i*dayMs).toLocaleDateString('en-GB') + ' → ' + new Date(minDate.getTime()+(j-1)*dayMs).toLocaleDateString('en-GB');
       gridRow.appendChild(bar);
       i = j - 1;
     }
@@ -1699,7 +1746,7 @@ function renderGantt(data, containerId) {
       const bar = document.createElement('div');
       bar.style.cssText = 'position:absolute;height:22px;top:5px;border-radius:5px;min-width:4px;display:flex;align-items:center;padding:0 6px;font-size:9px;font-weight:600;color:#fff;overflow:hidden;white-space:nowrap;z-index:2;cursor:pointer;left:'+(off*dayWidth)+'px;width:'+(dur*dayWidth)+'px;background:'+getStatusColor(t.status);
       bar.textContent = t.client ? t.client + (t.scope ? ' - ' + t.scope : '') : t.install;
-      bar.title = techName + '\n' + (t.client||'') + '\n' + (t.install||'') + '\n' + (t.scope||'') + '\n' + t.start.toLocaleDateString('en-GB') + ' → ' + t.end.toLocaleDateString('en-GB') + '\n' + t.status;
+      bar.title = techName + '\n' + (t.client||'(no client)') + (t.scope ? '\nScope: ' + t.scope : '') + '\n' + (t.install||'') + '\n' + t.start.toLocaleDateString('en-GB') + ' → ' + t.end.toLocaleDateString('en-GB') + '\n' + t.status;
       gridRow.appendChild(bar);
     });
 
@@ -1724,7 +1771,7 @@ function renderGantt(data, containerId) {
         const bar = document.createElement('div');
         bar.style.cssText = 'position:absolute;height:22px;top:5px;border-radius:5px;min-width:4px;display:flex;align-items:center;padding:0 6px;font-size:9px;font-weight:600;color:#fff;overflow:hidden;white-space:nowrap;z-index:2;left:'+(off*dayWidth)+'px;width:'+(dur*dayWidth)+'px;background:'+getStatusColor(t.status);
         bar.textContent = t.scope || t.install;
-        bar.title = t.scope + '\n' + t.start.toLocaleDateString('en-GB') + ' → ' + t.end.toLocaleDateString('en-GB');
+        bar.title = techName + '\n' + client + (t.scope ? '\nScope: ' + t.scope : '') + '\n' + (t.install||'') + '\n' + t.start.toLocaleDateString('en-GB') + ' → ' + t.end.toLocaleDateString('en-GB') + '\n' + t.status;
         subGrid.appendChild(bar);
       });
       inner.appendChild(subGrid);
