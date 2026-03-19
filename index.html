@@ -1,0 +1,1144 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Axess GY — Operations Platform</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/apexcharts@4.3.0/dist/apexcharts.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+/* ═══════════════════════ DESIGN TOKENS ═══════════════════════ */
+:root {
+  --brand:#00636d; --brand-light:#009aa6; --brand-glow:#33b8c2; --brand-pale:#e0f5f6;
+  --warm:#e98300; --warm-pale:#fef0d6;
+  --success:#7ab800; --warning:#f59e0b; --danger:#ef4444; --info:#589199;
+  --bg:#f0f2f5; --bg-2:#e5e7eb; --card:#ffffff; --card-glass:rgba(255,255,255,0.72);
+  --text:#111827; --text-2:#4D5357; --text-3:#8a9196;
+  --border:rgba(0,0,0,0.06); --border-2:rgba(0,0,0,0.10);
+  --sidebar-bg:#1e2729; --sidebar-text:#94a3b8; --sidebar-active:#e2e8f0;
+  --r:14px; --r-sm:8px; --r-xs:6px;
+  --sh:0 1px 3px rgba(0,0,0,0.06); --sh-md:0 4px 12px rgba(0,0,0,0.08); --sh-lg:0 8px 32px rgba(0,0,0,0.12);
+  --glass-blur:16px; --glass-border:rgba(255,255,255,0.22);
+  --sidebar-w:260px; --sidebar-cw:72px; --topbar-h:60px;
+  --font:'Century Gothic','Trebuchet MS',Arial,sans-serif;
+  --font-mono:'JetBrains Mono','SF Mono','Fira Code',monospace;
+}
+[data-theme="dark"] {
+  --bg:#0b0d12; --bg-2:#1a1d23; --card:#141720; --card-glass:rgba(20,23,32,0.78);
+  --text:#e5e7eb; --text-2:#8a9196; --text-3:#6b7280;
+  --border:rgba(255,255,255,0.06); --border-2:rgba(255,255,255,0.10);
+  --glass-border:rgba(255,255,255,0.08);
+  --brand-pale:#003d43; --warm-pale:#2d1f00;
+  --sh:0 1px 3px rgba(0,0,0,0.3); --sh-md:0 4px 12px rgba(0,0,0,0.4); --sh-lg:0 8px 32px rgba(0,0,0,0.5);
+}
+
+/* ═══════════════════════ RESET & BASE ═══════════════════════ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:14px;scroll-behavior:smooth}
+body{font-family:var(--font);background:var(--bg);color:var(--text);line-height:1.5;overflow-x:hidden;transition:background .35s,color .35s}
+button,input,select,textarea{font-family:inherit;font-size:inherit;border:none;outline:none;background:none;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--brand-light);outline-offset:2px;border-radius:var(--r-xs)}
+::selection{background:var(--brand-light);color:#fff}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--text-3);border-radius:3px}
+
+/* ═══════════════════════ SIDEBAR ═══════════════════════ */
+.sidebar{position:fixed;left:0;top:0;bottom:0;width:var(--sidebar-w);background:var(--sidebar-bg);z-index:100;display:flex;flex-direction:column;transition:width .35s cubic-bezier(.4,0,.2,1);overflow:hidden}
+.sidebar.collapsed{width:var(--sidebar-cw)}
+.sb-brand{display:flex;align-items:center;gap:14px;padding:20px 22px;min-height:68px}
+.sb-logo{width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,var(--brand-light),var(--brand));display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:18px;flex-shrink:0}
+.sb-brand-text{font-size:17px;font-weight:700;color:#fff;white-space:nowrap;letter-spacing:2.5px;opacity:1;transition:opacity .25s}
+.sidebar.collapsed .sb-brand-text{opacity:0;pointer-events:none}
+.sb-nav{flex:1;padding:8px 12px;display:flex;flex-direction:column;gap:4px}
+.nav-item{display:flex;align-items:center;gap:14px;padding:12px 14px;border-radius:10px;color:var(--sidebar-text);font-weight:500;font-size:13px;transition:all .2s;white-space:nowrap;position:relative;min-height:44px}
+.nav-item:hover{background:rgba(255,255,255,0.06);color:#e2e8f0}
+.nav-item.active{background:rgba(42,157,143,0.15);color:var(--brand-glow)}
+.nav-item.active::before{content:'';position:absolute;left:0;top:8px;bottom:8px;width:3px;border-radius:0 3px 3px 0;background:var(--brand-light);box-shadow:0 0 8px var(--brand-glow)}
+.nav-icon{width:20px;height:20px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.nav-icon svg{width:20px;height:20px}
+.nav-badge{margin-left:auto;background:rgba(255,255,255,0.08);padding:2px 10px;border-radius:20px;font-size:11px;font-family:var(--font-mono);font-weight:500;min-width:32px;text-align:center}
+.nav-label{opacity:1;transition:opacity .2s}
+.sidebar.collapsed .nav-label,.sidebar.collapsed .nav-badge{opacity:0;pointer-events:none}
+.sb-footer{padding:12px;border-top:1px solid rgba(255,255,255,0.06);display:flex;flex-direction:column;gap:6px}
+.sb-toggle,.sb-theme{display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:10px;color:var(--sidebar-text);font-size:12px;font-weight:500;transition:all .2s;white-space:nowrap;min-height:44px}
+.sb-toggle:hover,.sb-theme:hover{background:rgba(255,255,255,0.06);color:#e2e8f0}
+.sb-toggle svg,.sb-theme svg{width:18px;height:18px;flex-shrink:0}
+.sidebar.collapsed .sb-toggle span,.sidebar.collapsed .sb-theme span{opacity:0}
+
+/* ═══════════════════════ TOPBAR ═══════════════════════ */
+.topbar{position:sticky;top:0;height:var(--topbar-h);background:var(--card-glass);backdrop-filter:blur(var(--glass-blur));border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 28px;z-index:90}
+.top-left{display:flex;align-items:center;gap:16px}
+.top-title{font-size:17px;font-weight:700;color:var(--text)}
+.top-subtitle{font-size:12px;color:var(--text-3);font-weight:500}
+.top-right{display:flex;align-items:center;gap:10px}
+
+/* ═══════════════════════ MAIN CONTENT ═══════════════════════ */
+.main{margin-left:var(--sidebar-w);min-height:100vh;transition:margin-left .35s cubic-bezier(.4,0,.2,1)}
+.sidebar.collapsed~.main{margin-left:var(--sidebar-cw)}
+.content{padding:24px 28px 40px}
+
+/* ═══════════════════════ BUTTONS ═══════════════════════ */
+.btn-primary{display:inline-flex;align-items:center;gap:8px;padding:9px 20px;border-radius:var(--r-sm);background:var(--brand-light);color:#fff;font-size:13px;font-weight:600;transition:all .2s;min-height:38px}
+.btn-primary:hover{background:var(--brand);transform:translateY(-1px);box-shadow:var(--sh-md)}
+.btn-primary svg{width:16px;height:16px}
+.btn-secondary{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:24px;border:1.5px solid var(--border-2);font-size:12px;font-weight:500;color:var(--text-2);transition:all .2s;min-height:36px}
+.btn-secondary:hover{border-color:var(--brand-light);color:var(--brand-light)}
+.btn-danger{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:var(--r-sm);background:var(--danger);color:#fff;font-size:12px;font-weight:600;transition:all .2s;min-height:36px}
+.btn-danger:hover{background:#dc2626}
+
+/* ═══════════════════════ FILTERS BAR ═══════════════════════ */
+.filters-bar{display:flex;flex-wrap:wrap;gap:10px;align-items:end;padding:16px 20px;background:var(--card-glass);backdrop-filter:blur(var(--glass-blur));border:1px solid var(--glass-border);border-radius:var(--r);margin-bottom:20px;box-shadow:var(--sh)}
+.filter-group{display:flex;flex-direction:column;gap:4px;min-width:130px}
+.filter-group label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--text-3)}
+.filter-input{padding:8px 12px;border-radius:var(--r-sm);border:1.5px solid var(--border-2);background:var(--bg);font-size:12.5px;color:var(--text);transition:all .2s;min-height:38px;min-width:120px}
+.filter-input:focus{border-color:var(--brand-light);box-shadow:0 0 0 3px rgba(42,157,143,0.12)}
+select.filter-input{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:28px}
+.filter-reset{align-self:end;padding:8px 18px;border-radius:var(--r-sm);background:var(--danger);color:#fff;font-size:12px;font-weight:600;transition:all .2s;min-height:38px;margin-left:auto}
+.filter-reset:hover{background:#dc2626}
+.filter-count{font-size:11px;color:var(--text-3);align-self:center;font-family:var(--font-mono);padding:8px 0}
+
+/* ═══════════════════════ KPI CARDS ═══════════════════════ */
+.kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:16px;margin-bottom:24px}
+.kpi-card{background:var(--card-glass);backdrop-filter:blur(var(--glass-blur));border:1px solid var(--glass-border);border-radius:var(--r);padding:20px;position:relative;overflow:hidden;transition:all .25s;box-shadow:var(--sh)}
+.kpi-card:hover{transform:translateY(-2px);box-shadow:var(--sh-md)}
+.kpi-accent{position:absolute;top:0;left:0;right:0;height:3px;border-radius:var(--r) var(--r) 0 0}
+.kpi-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.7px;color:var(--text-3);margin-bottom:8px}
+.kpi-value{font-family:var(--font-mono);font-size:26px;font-weight:700;color:var(--text);line-height:1.2}
+.kpi-sub{font-size:11px;color:var(--text-2);margin-top:6px}
+
+/* ═══════════════════════ DATA TABLE ═══════════════════════ */
+.data-table-wrap{background:var(--card-glass);backdrop-filter:blur(var(--glass-blur));border:1px solid var(--glass-border);border-radius:var(--r);overflow:hidden;box-shadow:var(--sh);margin-bottom:24px}
+.data-table-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border)}
+.data-table-title{font-size:14px;font-weight:700;color:var(--text)}
+.data-table{width:100%;border-collapse:collapse}
+.data-table thead{background:var(--bg)}
+.data-table th{padding:10px 14px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--text-3);text-align:left;border-bottom:2px solid var(--border);white-space:nowrap}
+.data-table td{padding:10px 14px;font-size:12px;color:var(--text);border-bottom:1px solid var(--border)}
+.data-table tr:hover td{background:var(--brand-pale)}
+.data-table .mono{font-family:var(--font-mono);font-size:11px}
+.status-badge{display:inline-flex;padding:3px 10px;border-radius:999px;font-size:10px;font-weight:700}
+.action-btns{display:flex;gap:6px}
+.action-btn{width:30px;height:30px;border-radius:var(--r-xs);display:flex;align-items:center;justify-content:center;transition:all .2s}
+.action-btn:hover{background:var(--bg-2)}
+.action-btn svg{width:14px;height:14px}
+.action-btn.edit{color:var(--brand-light)}
+.action-btn.delete{color:var(--danger)}
+
+/* ═══════════════════════ CHART GRID ═══════════════════════ */
+.chart-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:18px}
+.chart-card{background:var(--card-glass);backdrop-filter:blur(var(--glass-blur));border:1px solid var(--glass-border);border-radius:var(--r);overflow:hidden;box-shadow:var(--sh);transition:all .25s}
+.chart-card:hover{box-shadow:var(--sh-md)}
+.chart-card.wide{grid-column:span 2}
+.chart-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px 8px}
+.chart-title{font-size:13px;font-weight:600;color:var(--text)}
+.chart-tag{font-size:10px;color:var(--text-3);background:var(--bg);padding:2px 8px;border-radius:12px}
+.chart-body{padding:4px 12px 12px;height:300px;position:relative}
+
+/* ═══════════════════════ MODAL ═══════════════════════ */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);backdrop-filter:blur(4px);z-index:200;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal{background:var(--card);border-radius:var(--r);box-shadow:var(--sh-lg);width:95%;max-width:640px;max-height:90vh;overflow-y:auto;animation:modalIn .3s ease}
+@keyframes modalIn{from{opacity:0;transform:translateY(20px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
+.modal-header{display:flex;align-items:center;justify-content:space-between;padding:20px 24px;border-bottom:1px solid var(--border)}
+.modal-title{font-size:17px;font-weight:700;color:var(--text)}
+.modal-close{width:36px;height:36px;border-radius:var(--r-sm);display:flex;align-items:center;justify-content:center;color:var(--text-3);transition:all .2s}
+.modal-close:hover{background:var(--bg-2);color:var(--text)}
+.modal-close svg{width:20px;height:20px}
+.modal-body{padding:24px}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.form-group{display:flex;flex-direction:column;gap:6px}
+.form-group.full{grid-column:span 2}
+.form-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.7px;color:var(--text-3)}
+.form-control{padding:10px 14px;border-radius:var(--r-sm);border:1.5px solid var(--border-2);background:var(--bg);font-size:13px;color:var(--text);transition:all .2s;min-height:42px}
+.form-control:focus{border-color:var(--brand-light);box-shadow:0 0 0 3px rgba(42,157,143,0.12)}
+select.form-control{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:28px}
+textarea.form-control{min-height:80px;resize:vertical}
+.modal-footer{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:16px 24px;border-top:1px solid var(--border)}
+
+/* ═══════════════════════ TOAST ═══════════════════════ */
+.toast-container{position:fixed;top:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px}
+.toast{padding:14px 20px;border-radius:var(--r-sm);background:var(--card);border:1px solid var(--border);box-shadow:var(--sh-lg);font-size:13px;font-weight:500;display:flex;align-items:center;gap:10px;animation:toastIn .35s ease;max-width:380px}
+.toast.success{border-left:4px solid var(--success)}
+.toast.error{border-left:4px solid var(--danger)}
+.toast.info{border-left:4px solid var(--info)}
+@keyframes toastIn{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:translateX(0)}}
+
+/* ═══════════════════════ TAB PANELS ═══════════════════════ */
+.tab-panel{display:none}
+.tab-panel.active{display:block;animation:fadeUp .4s ease}
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+
+/* ═══════════════════════ MOBILE NAV ═══════════════════════ */
+.mobile-nav{display:none;position:sticky;top:0;z-index:95;background:var(--card-glass);backdrop-filter:blur(var(--glass-blur));border-bottom:1px solid var(--border);padding:0 16px;overflow-x:auto}
+.mobile-nav button{padding:14px 18px;font-size:12px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.8px;white-space:nowrap;border-bottom:2px solid transparent;transition:all .2s;min-height:44px}
+.mobile-nav button.active{color:var(--brand-light);border-bottom-color:var(--brand-light)}
+
+/* ═══════════════════════ LOADING ═══════════════════════ */
+.loading-spinner{display:flex;align-items:center;justify-content:center;padding:60px;color:var(--text-3);font-size:14px;gap:10px}
+.spinner{width:20px;height:20px;border:2.5px solid var(--border-2);border-top-color:var(--brand-light);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ═══════════════════════ EMPTY STATE ═══════════════════════ */
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 20px;text-align:center}
+.empty-icon{width:56px;height:56px;border-radius:16px;background:var(--brand-pale);color:var(--brand-light);display:flex;align-items:center;justify-content:center;margin-bottom:16px}
+.empty-icon svg{width:28px;height:28px}
+.empty-title{font-size:17px;font-weight:700;color:var(--text);margin-bottom:6px}
+.empty-desc{font-size:13px;color:var(--text-2);max-width:400px}
+
+/* ═══════════════════════ ANIMATIONS ═══════════════════════ */
+.kpi-card,.chart-card{opacity:0;transform:translateY(16px);animation:fadeSlideUp .5s ease forwards}
+.kpi-card:nth-child(1){animation-delay:.05s}.kpi-card:nth-child(2){animation-delay:.1s}.kpi-card:nth-child(3){animation-delay:.15s}.kpi-card:nth-child(4){animation-delay:.2s}.kpi-card:nth-child(5){animation-delay:.25s}
+.chart-card:nth-child(1){animation-delay:.1s}.chart-card:nth-child(2){animation-delay:.15s}.chart-card:nth-child(3){animation-delay:.2s}.chart-card:nth-child(4){animation-delay:.25s}
+@keyframes fadeSlideUp{to{opacity:1;transform:translateY(0)}}
+
+/* ═══════════════════════ RESPONSIVE ═══════════════════════ */
+@media(max-width:1280px){.kpi-row{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:1024px){
+  .sidebar{display:none}.main{margin-left:0!important}
+  .topbar{left:0!important;padding:0 16px}
+  .mobile-nav{display:flex}
+  .content{padding:16px}
+  .chart-grid{grid-template-columns:1fr}.chart-card.wide{grid-column:span 1}
+  .kpi-row{grid-template-columns:repeat(2,1fr)}
+  .form-grid{grid-template-columns:1fr}
+  .form-group.full{grid-column:span 1}
+}
+@media(max-width:768px){
+  .kpi-row{grid-template-columns:repeat(2,1fr);gap:10px}
+  .kpi-value{font-size:20px}
+  .filters-bar{flex-direction:column;gap:8px}
+  .filter-group{min-width:100%}
+}
+</style>
+</head>
+<body>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toasts" aria-live="polite"></div>
+
+<!-- ═══════════════════════ SIDEBAR ═══════════════════════ -->
+<aside class="sidebar" id="sidebar">
+  <div class="sb-brand">
+    <div class="sb-logo">A</div>
+    <span class="sb-brand-text">AXESS</span>
+  </div>
+  <nav class="sb-nav">
+    <button class="nav-item active" data-tab="personnel" onclick="switchTab('personnel')">
+      <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+      <span class="nav-label">Personnel</span>
+      <span class="nav-badge" id="badge-personnel">--</span>
+    </button>
+    <button class="nav-item" data-tab="equipment" onclick="switchTab('equipment')">
+      <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></span>
+      <span class="nav-label">Equipment</span>
+      <span class="nav-badge" id="badge-equipment">--</span>
+    </button>
+    <button class="nav-item" data-tab="quotes" onclick="switchTab('quotes')">
+      <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span>
+      <span class="nav-label">Quote Log</span>
+      <span class="nav-badge" id="badge-quotes">--</span>
+    </button>
+    <button class="nav-item" data-tab="projects" onclick="switchTab('projects')">
+      <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></span>
+      <span class="nav-label">Projects</span>
+      <span class="nav-badge" id="badge-projects">--</span>
+    </button>
+  </nav>
+  <div class="sb-footer">
+    <button class="sb-theme" onclick="toggleTheme()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+      <span>Theme</span>
+    </button>
+    <button class="sb-toggle" onclick="toggleSidebar()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+      <span>Collapse</span>
+    </button>
+  </div>
+</aside>
+
+<!-- ═══════════════════════ MAIN ═══════════════════════ -->
+<div class="main" id="main-content">
+  <div class="mobile-nav">
+    <button class="active" data-tab="personnel" onclick="switchTab('personnel')">Personnel</button>
+    <button data-tab="equipment" onclick="switchTab('equipment')">Equipment</button>
+    <button data-tab="quotes" onclick="switchTab('quotes')">Quotes</button>
+    <button data-tab="projects" onclick="switchTab('projects')">Projects</button>
+  </div>
+
+  <div class="topbar">
+    <div class="top-left">
+      <div>
+        <div class="top-title" id="top-title">Personnel Planner</div>
+        <div class="top-subtitle">Axess Guyana Operations</div>
+      </div>
+    </div>
+    <div class="top-right" id="top-actions"></div>
+  </div>
+
+  <div class="content">
+
+    <!-- ═══════ PERSONNEL TAB ═══════ -->
+    <div class="tab-panel active" id="panel-personnel">
+      <div class="filters-bar" id="filters-personnel">
+        <div class="filter-group"><label>Status</label><select class="filter-input" id="p-status" onchange="applyFilters('personnel')"><option value="">All</option></select></div>
+        <div class="filter-group"><label>Client</label><select class="filter-input" id="p-client" onchange="applyFilters('personnel')"><option value="">All</option></select></div>
+        <div class="filter-group"><label>Installation</label><select class="filter-input" id="p-installation" onchange="applyFilters('personnel')"><option value="">All</option></select></div>
+        <div class="filter-group"><label>Classification</label><select class="filter-input" id="p-classification" onchange="applyFilters('personnel')"><option value="">All</option></select></div>
+        <span class="filter-count" id="p-count"></span>
+        <button class="filter-reset" onclick="resetFilters('personnel')">Clear All</button>
+      </div>
+      <div class="kpi-row" id="kpi-personnel"></div>
+      <div id="table-personnel"><div class="loading-spinner"><div class="spinner"></div>Loading personnel data...</div></div>
+      <div class="chart-grid" id="charts-personnel" style="margin-top:24px"></div>
+    </div>
+
+    <!-- ═══════ EQUIPMENT TAB ═══════ -->
+    <div class="tab-panel" id="panel-equipment">
+      <div class="filters-bar" id="filters-equipment">
+        <div class="filter-group"><label>Status</label><select class="filter-input" id="e-status" onchange="applyFilters('equipment')"><option value="">All</option></select></div>
+        <div class="filter-group"><label>Category</label><select class="filter-input" id="e-category" onchange="applyFilters('equipment')"><option value="">All</option></select></div>
+        <div class="filter-group"><label>Calibration</label><select class="filter-input" id="e-calibration" onchange="applyFilters('equipment')"><option value="">All</option><option value="Valid">Valid</option><option value="Due Soon">Due Soon</option><option value="Expired">Expired</option></select></div>
+        <span class="filter-count" id="e-count"></span>
+        <button class="filter-reset" onclick="resetFilters('equipment')">Clear All</button>
+      </div>
+      <div class="kpi-row" id="kpi-equipment"></div>
+      <div id="table-equipment"><div class="loading-spinner"><div class="spinner"></div>Loading equipment data...</div></div>
+      <div class="chart-grid" id="charts-equipment" style="margin-top:24px"></div>
+    </div>
+
+    <!-- ═══════ QUOTES TAB ═══════ -->
+    <div class="tab-panel" id="panel-quotes">
+      <div class="kpi-row" id="kpi-quotes"></div>
+      <div id="table-quotes"><div class="loading-spinner"><div class="spinner"></div>Loading quotes...</div></div>
+      <div class="chart-grid" id="charts-quotes" style="margin-top:24px"></div>
+    </div>
+
+    <!-- ═══════ PROJECTS TAB ═══════ -->
+    <div class="tab-panel" id="panel-projects">
+      <div class="kpi-row" id="kpi-projects"></div>
+      <div id="table-projects"><div class="loading-spinner"><div class="spinner"></div>Loading projects...</div></div>
+      <div class="chart-grid" id="charts-projects" style="margin-top:24px"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════ PERSONNEL MODAL ═══════════════════════ -->
+<div class="modal-overlay" id="modal-personnel">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 class="modal-title" id="modal-personnel-title">New Personnel Assignment</h2>
+      <button class="modal-close" onclick="closeModal('personnel')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <form id="form-personnel" class="form-grid" onsubmit="return savePersonnel(event)">
+        <input type="hidden" id="pf-id">
+        <div class="form-group">
+          <label class="form-label">Technician Name *</label>
+          <input class="form-control" id="pf-name" required placeholder="Full name">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Competency</label>
+          <input class="form-control" id="pf-competency" placeholder="e.g. ROV Pilot, Inspector">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Start Date *</label>
+          <input type="date" class="form-control" id="pf-start" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">End Date</label>
+          <input type="date" class="form-control" id="pf-end">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Duration (days)</label>
+          <input type="number" class="form-control" id="pf-duration" min="1" placeholder="Auto-calculated if dates set">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Status *</label>
+          <select class="form-control" id="pf-status" required></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Client</label>
+          <select class="form-control" id="pf-client"><option value="">Select...</option></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Installation</label>
+          <select class="form-control" id="pf-installation"><option value="">Select...</option></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Work Order</label>
+          <input class="form-control" id="pf-workorder" placeholder="WO number">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Classification</label>
+          <select class="form-control" id="pf-classification"><option value="">Select...</option></select>
+        </div>
+        <div class="form-group full">
+          <label class="form-label">Scope</label>
+          <textarea class="form-control" id="pf-scope" placeholder="Description of work scope"></textarea>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal('personnel')">Cancel</button>
+      <button class="btn-primary" onclick="document.getElementById('form-personnel').requestSubmit()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        Save
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ EQUIPMENT MODAL ═══════════════════════ -->
+<div class="modal-overlay" id="modal-equipment">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 class="modal-title" id="modal-equipment-title">New Equipment</h2>
+      <button class="modal-close" onclick="closeModal('equipment')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <form id="form-equipment" class="form-grid" onsubmit="return saveEquipment(event)">
+        <input type="hidden" id="ef-id">
+        <div class="form-group">
+          <label class="form-label">Description *</label>
+          <input class="form-control" id="ef-description" required placeholder="Equipment name/description">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Equipment ID Code</label>
+          <input class="form-control" id="ef-code" placeholder="e.g. ROV-001">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Category</label>
+          <select class="form-control" id="ef-category"><option value="">Select...</option></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Calibration Status</label>
+          <select class="form-control" id="ef-calibstatus">
+            <option value="">Select...</option>
+            <option value="Valid">Valid</option>
+            <option value="Due Soon">Due Soon</option>
+            <option value="Expired">Expired</option>
+            <option value="N/A">N/A</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Calibration Due Date</label>
+          <input type="date" class="form-control" id="ef-calibdate">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Active</label>
+          <select class="form-control" id="ef-active">
+            <option value="true">Yes</option>
+            <option value="false">No</option>
+          </select>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal('equipment')">Cancel</button>
+      <button class="btn-primary" onclick="document.getElementById('form-equipment').requestSubmit()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        Save
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ DELETE CONFIRM MODAL ═══════════════════════ -->
+<div class="modal-overlay" id="modal-delete">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <h2 class="modal-title">Confirm Delete</h2>
+      <button class="modal-close" onclick="closeModal('delete')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:14px;color:var(--text)">Are you sure you want to delete this record? This action cannot be undone.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal('delete')">Cancel</button>
+      <button class="btn-danger" id="btn-confirm-delete" onclick="confirmDelete()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   AXESS GY OPS — Operations Platform with Supabase
+   ═══════════════════════════════════════════════════════════════ */
+
+// ─── Supabase Config ───
+const SUPABASE_URL = 'https://mfuamflrxvkjjnleqcws.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1mdWFtZmxyeHZrampubGVxY3dzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM5NTI2MjAsImV4cCI6MjA4OTUyODYyMH0.K2T2sPB8gaY2wNwCfUJJCNLmfc_3axth6zUqvOb2Vzg';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ─── State ───
+const COLORS = ['#2a9d8f','#e76f51','#3b82f6','#f59e0b','#8b5cf6','#10b981','#ec4899','#264653','#e9c46a','#06b6d4','#f43f5e','#84cc16'];
+const charts = {};
+let activeTab = 'personnel';
+let deleteTarget = null;
+const lookups = { clients: [], installations: [], classifications: [], categories: [], statuses: [], segments: [] };
+const state = {
+  personnel: { raw: [], filtered: [] },
+  equipment: { raw: [], filtered: [] },
+  quotes: { raw: [], filtered: [] },
+  projects: { raw: [], filtered: [] }
+};
+
+// ─── Utilities ───
+function esc(s) { if (s == null) return ''; const d = document.createElement('div'); d.textContent = String(s); return d.innerHTML; }
+function fmt(n) { n = +n; if (isNaN(n)) return '0'; if (Math.abs(n)>=1e6) return (n/1e6).toFixed(1)+'M'; if (Math.abs(n)>=1e3) return (n/1e3).toFixed(1)+'K'; return n%1===0?String(n):n.toFixed(1); }
+function fmtCur(n) { return '$' + fmt(n); }
+function fmtInt(n) { return Math.round(n||0).toLocaleString('en'); }
+function groupBy(arr, key) { const m = {}; arr.forEach(r => { const k = r[key] || '(blank)'; (m[k]=m[k]||[]).push(r); }); return m; }
+
+function toast(msg, type = 'info') {
+  const c = document.getElementById('toasts');
+  const t = document.createElement('div');
+  t.className = 'toast ' + type;
+  t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(() => { t.style.opacity='0'; t.style.transform='translateX(40px)'; t.style.transition='all .3s'; setTimeout(() => t.remove(), 350); }, 3500);
+}
+
+// ─── Theme & Sidebar ───
+function toggleTheme() {
+  const h = document.documentElement;
+  const dk = h.getAttribute('data-theme') === 'dark';
+  h.setAttribute('data-theme', dk ? 'light' : 'dark');
+  localStorage.setItem('axess-theme', dk ? 'light' : 'dark');
+  Object.values(charts).forEach(c => { if (c && c.updateOptions) c.updateOptions({ chart: { foreColor: !dk?'#9ca3af':'#6b7280' }, grid: { borderColor: !dk?'#2d3139':'#e5e7eb' }, tooltip: { theme: !dk?'dark':'light' } }, false, false); });
+}
+function toggleSidebar() { document.getElementById('sidebar').classList.toggle('collapsed'); }
+(function() { const s = localStorage.getItem('axess-theme'); if (s) document.documentElement.setAttribute('data-theme', s); })();
+
+// ─── Tabs ───
+const TAB_TITLES = { personnel: 'Personnel Planner', equipment: 'Equipment Manager', quotes: 'Quote Log & Revenue', projects: 'Master Projects' };
+
+function switchTab(tab) {
+  activeTab = tab;
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel-' + tab).classList.add('active');
+  document.querySelectorAll('.nav-item,.mobile-nav button').forEach(b => {
+    b.classList.toggle('active', b.getAttribute('data-tab') === tab);
+    if (b.getAttribute('role') === 'tab') b.setAttribute('aria-selected', b.getAttribute('data-tab') === tab);
+  });
+  document.getElementById('top-title').textContent = TAB_TITLES[tab] || tab;
+  updateTopActions();
+}
+
+function updateTopActions() {
+  const c = document.getElementById('top-actions');
+  if (activeTab === 'personnel') {
+    c.innerHTML = '<button class="btn-primary" onclick="openPersonnelModal()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>New Assignment</button>';
+  } else if (activeTab === 'equipment') {
+    c.innerHTML = '<button class="btn-primary" onclick="openEquipmentModal()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>New Equipment</button>';
+  } else {
+    c.innerHTML = '';
+  }
+}
+
+// ─── Modal Management ───
+function openModal(name) { document.getElementById('modal-' + name).classList.add('open'); }
+function closeModal(name) { document.getElementById('modal-' + name).classList.remove('open'); }
+
+// ─── Data Loading ───
+async function loadLookups() {
+  const [clients, installations, classifications, categories, statuses, segments] = await Promise.all([
+    sb.from('clients').select('*').order('name'),
+    sb.from('installations').select('*').order('name'),
+    sb.from('support_classifications').select('*').order('value'),
+    sb.from('equipment_categories').select('*').order('value'),
+    sb.from('statuses').select('*'),
+    sb.from('segments').select('*').order('value')
+  ]);
+  lookups.clients = clients.data || [];
+  lookups.installations = installations.data || [];
+  lookups.classifications = classifications.data || [];
+  lookups.categories = categories.data || [];
+  lookups.statuses = statuses.data || [];
+  lookups.segments = segments.data || [];
+  populateFormSelects();
+}
+
+function populateFormSelects() {
+  // Personnel form
+  const pStatus = document.getElementById('pf-status');
+  pStatus.innerHTML = lookups.statuses.filter(s => s.module === 'personnel').map(s => '<option value="'+esc(s.value)+'">'+esc(s.value)+'</option>').join('');
+
+  const pClient = document.getElementById('pf-client');
+  pClient.innerHTML = '<option value="">Select...</option>' + lookups.clients.map(c => '<option value="'+c.id+'">'+esc(c.name)+'</option>').join('');
+
+  const pInstall = document.getElementById('pf-installation');
+  pInstall.innerHTML = '<option value="">Select...</option>' + lookups.installations.map(i => '<option value="'+i.id+'">'+esc(i.name)+'</option>').join('');
+
+  const pClass = document.getElementById('pf-classification');
+  pClass.innerHTML = '<option value="">Select...</option>' + lookups.classifications.map(c => '<option value="'+c.id+'">'+esc(c.value)+'</option>').join('');
+
+  // Equipment form
+  const eCat = document.getElementById('ef-category');
+  eCat.innerHTML = '<option value="">Select...</option>' + lookups.categories.map(c => '<option value="'+c.id+'">'+esc(c.value)+'</option>').join('');
+
+  // Filters
+  populateFilterSelects();
+}
+
+function populateFilterSelects() {
+  const pStatuses = lookups.statuses.filter(s => s.module === 'personnel');
+  fillSelect('p-status', pStatuses.map(s => s.value));
+  fillSelect('p-client', lookups.clients.map(c => c.name));
+  fillSelect('p-installation', lookups.installations.map(i => i.name));
+  fillSelect('p-classification', lookups.classifications.map(c => c.value));
+
+  const eStatuses = lookups.statuses.filter(s => s.module === 'equipment');
+  fillSelect('e-status', eStatuses.map(s => s.value));
+  fillSelect('e-category', lookups.categories.map(c => c.value));
+}
+
+function fillSelect(id, values) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const current = el.value;
+  el.innerHTML = '<option value="">All</option>' + values.map(v => '<option value="'+esc(v)+'">'+esc(v)+'</option>').join('');
+  el.value = current;
+}
+
+async function loadPersonnel() {
+  const { data, error } = await sb.from('personnel_assignments')
+    .select('*, technicians(name, competency), clients(name), installations(name), support_classifications(value)')
+    .order('start_date', { ascending: false });
+  if (error) { toast('Error loading personnel: ' + error.message, 'error'); return; }
+  state.personnel.raw = (data || []).map(r => ({
+    ...r,
+    technician_name: r.technicians?.name || '',
+    competency: r.technicians?.competency || '',
+    client_name: r.clients?.name || '',
+    installation_name: r.installations?.name || '',
+    classification_name: r.support_classifications?.value || ''
+  }));
+  state.personnel.filtered = [...state.personnel.raw];
+  document.getElementById('badge-personnel').textContent = state.personnel.raw.length;
+  renderPersonnel();
+}
+
+async function loadEquipment() {
+  const { data, error } = await sb.from('equipment')
+    .select('*, equipment_categories(value)')
+    .order('description');
+  if (error) { toast('Error loading equipment: ' + error.message, 'error'); return; }
+  state.equipment.raw = (data || []).map(r => ({
+    ...r,
+    category_name: r.equipment_categories?.value || ''
+  }));
+  state.equipment.filtered = [...state.equipment.raw];
+  document.getElementById('badge-equipment').textContent = state.equipment.raw.length;
+  renderEquipment();
+}
+
+async function loadQuotes() {
+  const { data, error } = await sb.from('quotes')
+    .select('*, clients:customer_id(name), installations(name), segments(value)')
+    .order('quote_date', { ascending: false });
+  if (error) { toast('Error loading quotes: ' + error.message, 'error'); return; }
+  state.quotes.raw = (data || []).map(r => ({
+    ...r,
+    customer_name: r.clients?.name || '',
+    installation_name: r.installations?.name || '',
+    segment_name: r.segments?.value || ''
+  }));
+  state.quotes.filtered = [...state.quotes.raw];
+  document.getElementById('badge-quotes').textContent = state.quotes.raw.length;
+  renderQuotes();
+}
+
+async function loadProjects() {
+  const { data, error } = await sb.from('projects')
+    .select('*, clients(name), installations(name)')
+    .order('created_at', { ascending: false });
+  if (error) { toast('Error loading projects: ' + error.message, 'error'); return; }
+  state.projects.raw = (data || []).map(r => ({
+    ...r,
+    client_name: r.clients?.name || '',
+    installation_name: r.installations?.name || ''
+  }));
+  state.projects.filtered = [...state.projects.raw];
+  document.getElementById('badge-projects').textContent = state.projects.raw.length;
+  renderProjects();
+}
+
+// ─── Filters ───
+function applyFilters(tab) {
+  if (tab === 'personnel') {
+    const status = document.getElementById('p-status').value;
+    const client = document.getElementById('p-client').value;
+    const install = document.getElementById('p-installation').value;
+    const classif = document.getElementById('p-classification').value;
+    state.personnel.filtered = state.personnel.raw.filter(r => {
+      if (status && r.status !== status) return false;
+      if (client && r.client_name !== client) return false;
+      if (install && r.installation_name !== install) return false;
+      if (classif && r.classification_name !== classif) return false;
+      return true;
+    });
+    document.getElementById('p-count').textContent = state.personnel.filtered.length + ' of ' + state.personnel.raw.length;
+    renderPersonnel();
+  } else if (tab === 'equipment') {
+    const status = document.getElementById('e-status').value;
+    const cat = document.getElementById('e-category').value;
+    const calib = document.getElementById('e-calibration').value;
+    state.equipment.filtered = state.equipment.raw.filter(r => {
+      if (status && r.calibration_status !== status) return false;
+      if (cat && r.category_name !== cat) return false;
+      if (calib && r.calibration_status !== calib) return false;
+      return true;
+    });
+    document.getElementById('e-count').textContent = state.equipment.filtered.length + ' of ' + state.equipment.raw.length;
+    renderEquipment();
+  }
+}
+
+function resetFilters(tab) {
+  document.querySelectorAll('#filters-' + tab + ' .filter-input').forEach(el => { el.value = ''; });
+  if (tab === 'personnel') { state.personnel.filtered = [...state.personnel.raw]; renderPersonnel(); }
+  if (tab === 'equipment') { state.equipment.filtered = [...state.equipment.raw]; renderEquipment(); }
+  document.getElementById(tab.charAt(0) + '-count').textContent = '';
+}
+
+// ─── Render KPIs ───
+function renderKPIs(containerId, items) {
+  const c = document.getElementById(containerId);
+  c.innerHTML = items.map(k => {
+    let val = k.value;
+    if (k.format === 'cur') val = fmtCur(val);
+    else if (k.format === 'pct') val = (+val).toFixed(1) + '%';
+    else val = fmtInt(val);
+    return '<div class="kpi-card"><div class="kpi-accent" style="background:'+k.accent+'"></div>' +
+      '<div class="kpi-label">'+esc(k.label)+'</div><div class="kpi-value">'+val+'</div>' +
+      (k.sub ? '<div class="kpi-sub">'+esc(k.sub)+'</div>' : '') + '</div>';
+  }).join('');
+}
+
+// ─── Render Charts ───
+function buildChartGrid(containerId, chartDefs) {
+  const c = document.getElementById(containerId);
+  c.innerHTML = '';
+  chartDefs.forEach(def => {
+    const div = document.createElement('div');
+    div.className = 'chart-card' + (def.wide ? ' wide' : '');
+    div.innerHTML = '<div class="chart-header"><span class="chart-title">'+esc(def.title)+'</span>' +
+      (def.tag ? '<span class="chart-tag">'+esc(def.tag)+'</span>' : '') + '</div><div class="chart-body" id="'+def.id+'"></div>';
+    c.appendChild(div);
+    if (charts[def.id]) { charts[def.id].destroy(); delete charts[def.id]; }
+    const dk = document.documentElement.getAttribute('data-theme') === 'dark';
+    def.options.chart.foreColor = dk ? '#9ca3af' : '#6b7280';
+    def.options.chart.background = 'transparent';
+    if (!def.options.grid) def.options.grid = {};
+    def.options.grid.borderColor = dk ? '#2d3139' : '#e5e7eb';
+    if (!def.options.tooltip) def.options.tooltip = {};
+    def.options.tooltip.theme = dk ? 'dark' : 'light';
+    charts[def.id] = new ApexCharts(document.getElementById(def.id), def.options);
+    charts[def.id].render();
+  });
+}
+
+// ─── PERSONNEL RENDERING ───
+function renderPersonnel() {
+  const d = state.personnel.filtered;
+  const total = d.length;
+  const onSite = d.filter(r => r.status === 'On Site' || r.status === 'Confirmed').length;
+  const planned = d.filter(r => r.status === 'Planned').length;
+  const uniqueTechs = new Set(d.map(r => r.technician_name)).size;
+  const avgDur = total > 0 ? d.reduce((s, r) => s + (r.duration_days || 0), 0) / total : 0;
+
+  renderKPIs('kpi-personnel', [
+    { label: 'Total Assignments', value: total, format: 'int', accent: 'var(--brand)' },
+    { label: 'Active / On Site', value: onSite, format: 'int', accent: 'var(--success)' },
+    { label: 'Planned', value: planned, format: 'int', accent: 'var(--info)' },
+    { label: 'Technicians', value: uniqueTechs, format: 'int', accent: 'var(--warm)' },
+    { label: 'Avg Duration', value: avgDur, format: 'int', sub: 'days', accent: 'var(--warning)' }
+  ]);
+
+  // Table
+  const container = document.getElementById('table-personnel');
+  if (total === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div><div class="empty-title">No personnel assignments</div><div class="empty-desc">Click "New Assignment" to create one.</div></div>';
+  } else {
+    container.innerHTML = '<div class="data-table-wrap"><div class="data-table-header"><span class="data-table-title">Assignments ('+total+')</span></div>' +
+      '<table class="data-table"><thead><tr><th>Technician</th><th>Competency</th><th>Start</th><th>End</th><th>Days</th><th>Installation</th><th>Client</th><th>Status</th><th>Work Order</th><th>Actions</th></tr></thead><tbody>' +
+      d.map(r => {
+        const sc = getStatusColor(r.status);
+        return '<tr><td><strong>'+esc(r.technician_name)+'</strong></td>' +
+          '<td>'+esc(r.competency)+'</td>' +
+          '<td class="mono">'+(r.start_date||'—')+'</td>' +
+          '<td class="mono">'+(r.end_date||'—')+'</td>' +
+          '<td class="mono">'+(r.duration_days||'—')+'</td>' +
+          '<td>'+esc(r.installation_name)+'</td>' +
+          '<td>'+esc(r.client_name)+'</td>' +
+          '<td><span class="status-badge" style="background:'+sc+'20;color:'+sc+'">'+esc(r.status)+'</span></td>' +
+          '<td class="mono">'+esc(r.work_order||'')+'</td>' +
+          '<td><div class="action-btns">' +
+          '<button class="action-btn edit" onclick="editPersonnel('+r.id+')" title="Edit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>' +
+          '<button class="action-btn delete" onclick="deletePersonnel('+r.id+')" title="Delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>' +
+          '</div></td></tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+
+  // Charts
+  const sg = groupBy(d, 'status');
+  const sl = Object.keys(sg).sort((a,b) => sg[b].length - sg[a].length);
+  const statusChart = { chart:{type:'donut',height:280}, series:sl.map(s=>sg[s].length), labels:sl, colors:sl.map(s=>getStatusColor(s)),
+    plotOptions:{pie:{donut:{size:'72%',labels:{show:true,total:{show:true,label:'Total',formatter:w=>fmtInt(w.globals.seriesTotals.reduce((a,b)=>a+b,0))}}}}},
+    dataLabels:{enabled:false}, legend:{position:'bottom',fontSize:'12px'}, stroke:{width:2} };
+
+  const ig = groupBy(d, 'installation_name');
+  const ie = Object.entries(ig).map(([k,v])=>[k,v.length]).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  const installChart = { chart:{type:'bar',height:280}, series:[{data:ie.map(e=>e[1])}],
+    plotOptions:{bar:{horizontal:true,borderRadius:6,barHeight:'60%',distributed:true}}, colors:COLORS,
+    xaxis:{categories:ie.map(e=>e[0])}, yaxis:{labels:{style:{fontSize:'11px'},maxWidth:160}},
+    dataLabels:{enabled:true,textAnchor:'start',offsetX:5,style:{fontSize:'11px'}}, legend:{show:false} };
+
+  const cg = groupBy(d, 'client_name');
+  const ce = Object.entries(cg).map(([k,v])=>[k,v.length]).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const clientChart = { chart:{type:'bar',height:280}, series:[{data:ce.map(e=>e[1])}],
+    plotOptions:{bar:{horizontal:true,borderRadius:6,barHeight:'60%',distributed:true}}, colors:COLORS.slice(3),
+    xaxis:{categories:ce.map(e=>e[0])}, yaxis:{labels:{style:{fontSize:'11px'},maxWidth:160}},
+    dataLabels:{enabled:true,textAnchor:'start',offsetX:5,style:{fontSize:'11px'}}, legend:{show:false} };
+
+  const chartDefs = [{ id:'c-p-status', title:'Status Distribution', options:statusChart }];
+  if (ie.length) chartDefs.push({ id:'c-p-install', title:'By Installation', tag:'top 10', options:installChart });
+  if (ce.length) chartDefs.push({ id:'c-p-client', title:'By Client', options:clientChart });
+  buildChartGrid('charts-personnel', chartDefs);
+}
+
+function getStatusColor(status) {
+  const colors = { 'Planned':'#3b82f6','Confirmed':'#7ab800','On Site':'#009aa6','Completed':'#6b7280','Cancelled':'#ef4444','Standby':'#f59e0b',
+    'Available':'#7ab800','Deployed':'#009aa6','In Transit':'#f59e0b','Maintenance':'#e98300','Out of Service':'#ef4444',
+    'Draft':'#6b7280','Sent':'#3b82f6','Won':'#7ab800','Lost':'#ef4444','Expired':'#f59e0b',
+    'Open':'#3b82f6','In Progress':'#009aa6','Pending Invoice':'#f59e0b','Closed':'#6b7280','On Hold':'#e98300' };
+  return colors[status] || COLORS[0];
+}
+
+// ─── EQUIPMENT RENDERING ───
+function renderEquipment() {
+  const d = state.equipment.filtered;
+  const total = d.length;
+  const active = d.filter(r => r.active).length;
+  const valid = d.filter(r => r.calibration_status === 'Valid').length;
+  const dueSoon = d.filter(r => r.calibration_status === 'Due Soon').length;
+  const expired = d.filter(r => r.calibration_status === 'Expired').length;
+
+  renderKPIs('kpi-equipment', [
+    { label: 'Total Equipment', value: total, format: 'int', accent: 'var(--brand)' },
+    { label: 'Active', value: active, format: 'int', accent: 'var(--success)' },
+    { label: 'Calibrated', value: valid, format: 'int', accent: 'var(--info)' },
+    { label: 'Due Soon', value: dueSoon, format: 'int', accent: 'var(--warning)' },
+    { label: 'Expired', value: expired, format: 'int', accent: 'var(--danger)' }
+  ]);
+
+  const container = document.getElementById('table-equipment');
+  if (total === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></div><div class="empty-title">No equipment registered</div><div class="empty-desc">Click "New Equipment" to add one.</div></div>';
+  } else {
+    container.innerHTML = '<div class="data-table-wrap"><div class="data-table-header"><span class="data-table-title">Equipment Inventory ('+total+')</span></div>' +
+      '<table class="data-table"><thead><tr><th>Description</th><th>ID Code</th><th>Category</th><th>Calibration Status</th><th>Calibration Due</th><th>Active</th><th>Actions</th></tr></thead><tbody>' +
+      d.map(r => {
+        const cs = r.calibration_status || 'N/A';
+        const cc = cs === 'Valid' ? 'var(--success)' : cs === 'Due Soon' ? 'var(--warning)' : cs === 'Expired' ? 'var(--danger)' : 'var(--text-3)';
+        return '<tr><td><strong>'+esc(r.description)+'</strong></td>' +
+          '<td class="mono">'+esc(r.equipment_id_code||'—')+'</td>' +
+          '<td>'+esc(r.category_name)+'</td>' +
+          '<td><span class="status-badge" style="background:'+cc+'20;color:'+cc+'">'+esc(cs)+'</span></td>' +
+          '<td class="mono">'+(r.calibration_due_date||'—')+'</td>' +
+          '<td>'+(r.active ? 'Yes' : 'No')+'</td>' +
+          '<td><div class="action-btns">' +
+          '<button class="action-btn edit" onclick="editEquipment('+r.id+')" title="Edit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>' +
+          '<button class="action-btn delete" onclick="deleteEquipment('+r.id+')" title="Delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>' +
+          '</div></td></tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+
+  // Charts
+  const calibGroups = { Valid:0, 'Due Soon':0, Expired:0, 'N/A':0 };
+  d.forEach(r => { const s = r.calibration_status || 'N/A'; if (calibGroups[s] !== undefined) calibGroups[s]++; });
+  const calibChart = { chart:{type:'donut',height:280}, series:Object.values(calibGroups), labels:Object.keys(calibGroups),
+    colors:['#7ab800','#f59e0b','#ef4444','#9ca3af'],
+    plotOptions:{pie:{donut:{size:'72%',labels:{show:true,total:{show:true,label:'Total',formatter:w=>fmtInt(w.globals.seriesTotals.reduce((a,b)=>a+b,0))}}}}},
+    dataLabels:{enabled:false}, legend:{position:'bottom',fontSize:'12px'}, stroke:{width:2} };
+
+  const cg = groupBy(d, 'category_name');
+  const ce = Object.entries(cg).map(([k,v])=>[k,v.length]).sort((a,b)=>b[1]-a[1]);
+  const catChart = { chart:{type:'bar',height:280}, series:[{name:'Equipment',data:ce.map(e=>e[1])}], colors:[COLORS[4]],
+    plotOptions:{bar:{borderRadius:5,columnWidth:'55%'}}, dataLabels:{enabled:false},
+    xaxis:{categories:ce.map(e=>e[0]),labels:{style:{fontSize:'10px'},rotate:-45}}, legend:{show:false} };
+
+  const chartDefs = [{ id:'c-e-calib', title:'Calibration Status', options:calibChart }];
+  if (ce.length) chartDefs.push({ id:'c-e-cat', title:'By Category', options:catChart });
+  buildChartGrid('charts-equipment', chartDefs);
+}
+
+// ─── QUOTES RENDERING ───
+function renderQuotes() {
+  const d = state.quotes.filtered;
+  const total = d.length;
+  const totalRev = d.reduce((s,r) => s + (+r.sum_total || 0), 0);
+  const won = d.filter(r => r.status === 'Won').length;
+  const winRate = total > 0 ? (won / total * 100) : 0;
+  const avgVal = total > 0 ? totalRev / total : 0;
+
+  renderKPIs('kpi-quotes', [
+    { label: 'Total Quotes', value: total, format: 'int', accent: 'var(--brand)' },
+    { label: 'Pipeline Value', value: totalRev, format: 'cur', accent: 'var(--info)' },
+    { label: 'Won', value: won, format: 'int', accent: 'var(--success)' },
+    { label: 'Win Rate', value: winRate, format: 'pct', accent: 'var(--warm)' },
+    { label: 'Avg Quote', value: avgVal, format: 'cur', accent: 'var(--warning)' }
+  ]);
+
+  const container = document.getElementById('table-quotes');
+  if (total === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div><div class="empty-title">No quotes yet</div><div class="empty-desc">Quotes will appear here once added to the database.</div></div>';
+  } else {
+    container.innerHTML = '<div class="data-table-wrap"><div class="data-table-header"><span class="data-table-title">Quotes ('+total+')</span></div>' +
+      '<table class="data-table"><thead><tr><th>Title</th><th>Customer</th><th>Status</th><th>Segment</th><th>Responsible</th><th>Date</th><th>Amount</th><th>Probability</th></tr></thead><tbody>' +
+      d.slice(0,50).map(r => {
+        const sc = getStatusColor(r.status);
+        return '<tr><td><strong>'+esc(r.title)+'</strong></td>' +
+          '<td>'+esc(r.customer_name)+'</td>' +
+          '<td><span class="status-badge" style="background:'+sc+'20;color:'+sc+'">'+esc(r.status)+'</span></td>' +
+          '<td>'+esc(r.segment_name)+'</td>' +
+          '<td>'+esc(r.responsible||'')+'</td>' +
+          '<td class="mono">'+(r.quote_date||'—')+'</td>' +
+          '<td class="mono">'+fmtCur(r.sum_total||0)+'</td>' +
+          '<td class="mono">'+(r.probability != null ? r.probability+'%' : '—')+'</td></tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+
+  // Charts
+  if (total > 0) {
+    const sg = groupBy(d, 'status');
+    const sl = Object.keys(sg).sort((a,b) => sg[b].length - sg[a].length);
+    const statusChart = { chart:{type:'donut',height:280}, series:sl.map(s=>sg[s].length), labels:sl, colors:sl.map(s=>getStatusColor(s)),
+      plotOptions:{pie:{donut:{size:'72%',labels:{show:true,total:{show:true,label:'Total',formatter:w=>fmtInt(w.globals.seriesTotals.reduce((a,b)=>a+b,0))}}}}},
+      dataLabels:{enabled:false}, legend:{position:'bottom',fontSize:'12px'}, stroke:{width:2} };
+
+    const segg = {};
+    d.forEach(r => { const s = r.segment_name || '(blank)'; segg[s] = (segg[s]||0) + (+r.sum_total||0); });
+    const se = Object.entries(segg).sort((a,b)=>b[1]-a[1]);
+    const segChart = { chart:{type:'bar',height:280}, series:[{data:se.map(e=>e[1])}],
+      plotOptions:{bar:{horizontal:true,borderRadius:6,barHeight:'60%',distributed:true}}, colors:COLORS,
+      xaxis:{categories:se.map(e=>e[0])}, yaxis:{labels:{style:{fontSize:'11px'}}},
+      dataLabels:{enabled:true,textAnchor:'start',offsetX:5,style:{fontSize:'11px'},formatter:v=>fmtCur(v)}, legend:{show:false},
+      tooltip:{y:{formatter:v=>fmtCur(v)}} };
+
+    buildChartGrid('charts-quotes', [
+      { id:'c-q-status', title:'Quote Status', options:statusChart },
+      { id:'c-q-segment', title:'Revenue by Segment', options:segChart }
+    ]);
+  }
+}
+
+// ─── PROJECTS RENDERING ───
+function renderProjects() {
+  const d = state.projects.filtered;
+  const total = d.length;
+  const totalPO = d.reduce((s,r) => s + (+r.po_value || 0), 0);
+  const invoiced = d.filter(r => r.invoice_issued).length;
+  const open = d.filter(r => r.status === 'Open' || r.status === 'In Progress').length;
+
+  renderKPIs('kpi-projects', [
+    { label: 'Work Orders', value: total, format: 'int', accent: 'var(--brand)' },
+    { label: 'Total PO Value', value: totalPO, format: 'cur', accent: 'var(--info)' },
+    { label: 'Active', value: open, format: 'int', accent: 'var(--success)' },
+    { label: 'Invoiced', value: invoiced, format: 'int', accent: 'var(--warm)' },
+    { label: 'Pending', value: total - invoiced, format: 'int', accent: 'var(--warning)' }
+  ]);
+
+  const container = document.getElementById('table-projects');
+  if (total === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div><div class="empty-title">No projects yet</div><div class="empty-desc">Projects will appear here once added to the database.</div></div>';
+  } else {
+    container.innerHTML = '<div class="data-table-wrap"><div class="data-table-header"><span class="data-table-title">Projects ('+total+')</span></div>' +
+      '<table class="data-table"><thead><tr><th>Work Order</th><th>Description</th><th>Client</th><th>Installation</th><th>PO Value</th><th>Status</th><th>Responsible</th></tr></thead><tbody>' +
+      d.slice(0,50).map(r => {
+        const sc = getStatusColor(r.status);
+        return '<tr><td class="mono"><strong>'+esc(r.work_order_number||'—')+'</strong></td>' +
+          '<td>'+esc(r.description||'')+'</td>' +
+          '<td>'+esc(r.client_name)+'</td>' +
+          '<td>'+esc(r.installation_name)+'</td>' +
+          '<td class="mono">'+fmtCur(r.po_value||0)+'</td>' +
+          '<td><span class="status-badge" style="background:'+sc+'20;color:'+sc+'">'+esc(r.status)+'</span></td>' +
+          '<td>'+esc(r.responsible||'')+'</td></tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+
+  if (total > 0) {
+    const sg = groupBy(d, 'status');
+    const sl = Object.keys(sg).sort((a,b) => sg[b].length - sg[a].length);
+    const statusChart = { chart:{type:'donut',height:280}, series:sl.map(s=>sg[s].length), labels:sl, colors:sl.map(s=>getStatusColor(s)),
+      plotOptions:{pie:{donut:{size:'72%',labels:{show:true,total:{show:true,label:'Total',formatter:w=>fmtInt(w.globals.seriesTotals.reduce((a,b)=>a+b,0))}}}}},
+      dataLabels:{enabled:false}, legend:{position:'bottom',fontSize:'12px'}, stroke:{width:2} };
+    buildChartGrid('charts-projects', [{ id:'c-pr-status', title:'Project Status', options:statusChart }]);
+  }
+}
+
+// ─── PERSONNEL CRUD ───
+function openPersonnelModal(data) {
+  document.getElementById('modal-personnel-title').textContent = data ? 'Edit Assignment' : 'New Personnel Assignment';
+  document.getElementById('pf-id').value = data ? data.id : '';
+  document.getElementById('pf-name').value = data ? data.technician_name : '';
+  document.getElementById('pf-competency').value = data ? data.competency : '';
+  document.getElementById('pf-start').value = data ? data.start_date : '';
+  document.getElementById('pf-end').value = data ? data.end_date || '' : '';
+  document.getElementById('pf-duration').value = data ? data.duration_days || '' : '';
+  document.getElementById('pf-status').value = data ? data.status : 'Planned';
+  document.getElementById('pf-client').value = data ? data.client_id || '' : '';
+  document.getElementById('pf-installation').value = data ? data.installation_id || '' : '';
+  document.getElementById('pf-workorder').value = data ? data.work_order || '' : '';
+  document.getElementById('pf-classification').value = data ? data.support_classification_id || '' : '';
+  document.getElementById('pf-scope').value = data ? data.scope || '' : '';
+  openModal('personnel');
+}
+
+async function editPersonnel(id) {
+  const record = state.personnel.raw.find(r => r.id === id);
+  if (record) openPersonnelModal(record);
+}
+
+async function savePersonnel(e) {
+  e.preventDefault();
+  const id = document.getElementById('pf-id').value;
+  const name = document.getElementById('pf-name').value.trim();
+  const competency = document.getElementById('pf-competency').value.trim();
+
+  // Upsert technician
+  let techId;
+  const { data: existingTech } = await sb.from('technicians').select('id').eq('name', name).maybeSingle();
+  if (existingTech) {
+    techId = existingTech.id;
+    if (competency) await sb.from('technicians').update({ competency }).eq('id', techId);
+  } else {
+    const { data: newTech, error } = await sb.from('technicians').insert({ name, competency }).select('id').single();
+    if (error) { toast('Error creating technician: ' + error.message, 'error'); return false; }
+    techId = newTech.id;
+  }
+
+  const record = {
+    technician_id: techId,
+    start_date: document.getElementById('pf-start').value,
+    end_date: document.getElementById('pf-end').value || null,
+    duration_days: parseInt(document.getElementById('pf-duration').value) || null,
+    status: document.getElementById('pf-status').value,
+    client_id: document.getElementById('pf-client').value || null,
+    installation_id: document.getElementById('pf-installation').value || null,
+    work_order: document.getElementById('pf-workorder').value || null,
+    support_classification_id: document.getElementById('pf-classification').value || null,
+    scope: document.getElementById('pf-scope').value || null
+  };
+
+  // Auto-calculate duration
+  if (record.start_date && record.end_date && !record.duration_days) {
+    const diff = (new Date(record.end_date) - new Date(record.start_date)) / 864e5;
+    record.duration_days = Math.round(diff);
+  }
+
+  let error;
+  if (id) {
+    ({ error } = await sb.from('personnel_assignments').update(record).eq('id', id));
+  } else {
+    ({ error } = await sb.from('personnel_assignments').insert(record));
+  }
+
+  if (error) { toast('Error saving: ' + error.message, 'error'); return false; }
+  toast(id ? 'Assignment updated' : 'Assignment created', 'success');
+  closeModal('personnel');
+  await loadPersonnel();
+  return false;
+}
+
+function deletePersonnel(id) {
+  deleteTarget = { table: 'personnel_assignments', id };
+  openModal('delete');
+}
+
+// ─── EQUIPMENT CRUD ───
+function openEquipmentModal(data) {
+  document.getElementById('modal-equipment-title').textContent = data ? 'Edit Equipment' : 'New Equipment';
+  document.getElementById('ef-id').value = data ? data.id : '';
+  document.getElementById('ef-description').value = data ? data.description : '';
+  document.getElementById('ef-code').value = data ? data.equipment_id_code || '' : '';
+  document.getElementById('ef-category').value = data ? data.category_id || '' : '';
+  document.getElementById('ef-calibstatus').value = data ? data.calibration_status || '' : '';
+  document.getElementById('ef-calibdate').value = data ? data.calibration_due_date || '' : '';
+  document.getElementById('ef-active').value = data ? String(data.active) : 'true';
+  openModal('equipment');
+}
+
+async function editEquipment(id) {
+  const record = state.equipment.raw.find(r => r.id === id);
+  if (record) openEquipmentModal(record);
+}
+
+async function saveEquipment(e) {
+  e.preventDefault();
+  const id = document.getElementById('ef-id').value;
+  const record = {
+    description: document.getElementById('ef-description').value.trim(),
+    equipment_id_code: document.getElementById('ef-code').value.trim() || null,
+    category_id: document.getElementById('ef-category').value || null,
+    calibration_status: document.getElementById('ef-calibstatus').value || null,
+    calibration_due_date: document.getElementById('ef-calibdate').value || null,
+    active: document.getElementById('ef-active').value === 'true'
+  };
+
+  let error;
+  if (id) {
+    ({ error } = await sb.from('equipment').update(record).eq('id', id));
+  } else {
+    ({ error } = await sb.from('equipment').insert(record));
+  }
+
+  if (error) { toast('Error saving: ' + error.message, 'error'); return false; }
+  toast(id ? 'Equipment updated' : 'Equipment created', 'success');
+  closeModal('equipment');
+  await loadEquipment();
+  return false;
+}
+
+function deleteEquipment(id) {
+  deleteTarget = { table: 'equipment', id };
+  openModal('delete');
+}
+
+// ─── Delete confirm ───
+async function confirmDelete() {
+  if (!deleteTarget) return;
+  const { error } = await sb.from(deleteTarget.table).delete().eq('id', deleteTarget.id);
+  if (error) { toast('Error deleting: ' + error.message, 'error'); closeModal('delete'); return; }
+  toast('Record deleted', 'success');
+  closeModal('delete');
+  deleteTarget = null;
+  if (activeTab === 'personnel') await loadPersonnel();
+  else if (activeTab === 'equipment') await loadEquipment();
+}
+
+// ─── Close modals on overlay click ───
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('open'); });
+});
+
+// ─── INIT ───
+document.addEventListener('DOMContentLoaded', async function() {
+  updateTopActions();
+  try {
+    await loadLookups();
+    await Promise.all([loadPersonnel(), loadEquipment(), loadQuotes(), loadProjects()]);
+    toast('Connected to Supabase — data loaded', 'success');
+  } catch (err) {
+    toast('Connection error: ' + err.message, 'error');
+  }
+});
+</script>
+</body>
+</html>
