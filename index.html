@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/apexcharts@4.3.0/dist/apexcharts.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
 /* ═══════════════════════ DESIGN TOKENS ═══════════════════════ */
@@ -188,6 +189,24 @@ textarea.form-control{min-height:80px;resize:vertical}
 .empty-icon svg{width:28px;height:28px}
 .empty-title{font-size:17px;font-weight:700;color:var(--text);margin-bottom:6px}
 .empty-desc{font-size:13px;color:var(--text-2);max-width:400px}
+
+/* ═══════════════════════ UPLOAD / IMPORT ═══════════════════════ */
+.upload-pill{display:inline-flex;align-items:center;gap:8px;padding:7px 16px;border-radius:24px;border:1.5px solid var(--border-2);font-size:12px;font-weight:500;color:var(--text-2);transition:all .2s;position:relative;overflow:hidden;min-height:36px;cursor:pointer}
+.upload-pill:hover{border-color:var(--brand-light);color:var(--brand-light);background:var(--brand-pale)}
+.upload-pill input[type="file"]{position:absolute;inset:0;opacity:0;cursor:pointer}
+.upload-pill svg{width:14px;height:14px;flex-shrink:0}
+.import-progress{padding:20px 24px}
+.import-progress .progress-bar{width:100%;height:8px;border-radius:4px;background:var(--bg-2);overflow:hidden;margin:12px 0}
+.import-progress .progress-fill{height:100%;border-radius:4px;background:var(--brand-light);transition:width .3s}
+.import-progress .progress-text{font-size:12px;color:var(--text-2);font-family:var(--font-mono)}
+.file-upload-area{border:2px dashed var(--border-2);border-radius:var(--r-sm);padding:16px;text-align:center;transition:all .2s;cursor:pointer;position:relative}
+.file-upload-area:hover{border-color:var(--brand-light);background:var(--brand-pale)}
+.file-upload-area input[type="file"]{position:absolute;inset:0;opacity:0;cursor:pointer}
+.file-upload-area .file-name{font-size:12px;color:var(--brand-light);font-weight:600;margin-top:4px}
+.file-upload-area svg{width:20px;height:20px;color:var(--text-3);margin-bottom:4px}
+.cert-link{display:inline-flex;align-items:center;gap:4px;color:var(--brand-light);font-size:11px;font-weight:600;text-decoration:none}
+.cert-link:hover{text-decoration:underline}
+.cert-link svg{width:12px;height:12px}
 
 /* ═══════════════════════ ANIMATIONS ═══════════════════════ */
 .kpi-card,.chart-card{opacity:0;transform:translateY(16px);animation:fadeSlideUp .5s ease forwards}
@@ -436,6 +455,16 @@ textarea.form-control{min-height:80px;resize:vertical}
             <option value="false">No</option>
           </select>
         </div>
+        <div class="form-group full">
+          <label class="form-label">Calibration Certificate (PDF)</label>
+          <div class="file-upload-area" id="ef-cert-area">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            <div style="font-size:12px;color:var(--text-3)">Click or drag to upload PDF</div>
+            <div class="file-name" id="ef-cert-name"></div>
+            <input type="file" accept=".pdf" id="ef-cert-file" onchange="onCertFileSelected(this)">
+          </div>
+          <input type="hidden" id="ef-cert-url">
+        </div>
       </form>
     </div>
     <div class="modal-footer">
@@ -533,9 +562,11 @@ function switchTab(tab) {
 function updateTopActions() {
   const c = document.getElementById('top-actions');
   if (activeTab === 'personnel') {
-    c.innerHTML = '<button class="btn-primary" onclick="openPersonnelModal()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>New Assignment</button>';
+    c.innerHTML = '<label class="upload-pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Import Excel<input type="file" accept=".xlsx,.xls,.csv" onchange="importExcel(this,\'personnel\')"></label>' +
+      '<button class="btn-primary" onclick="openPersonnelModal()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>New Assignment</button>';
   } else if (activeTab === 'equipment') {
-    c.innerHTML = '<button class="btn-primary" onclick="openEquipmentModal()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>New Equipment</button>';
+    c.innerHTML = '<label class="upload-pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Import Excel<input type="file" accept=".xlsx,.xls,.csv" onchange="importExcel(this,\'equipment\')"></label>' +
+      '<button class="btn-primary" onclick="openEquipmentModal()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>New Equipment</button>';
   } else {
     c.innerHTML = '';
   }
@@ -843,15 +874,17 @@ function renderEquipment() {
     container.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></div><div class="empty-title">No equipment registered</div><div class="empty-desc">Click "New Equipment" to add one.</div></div>';
   } else {
     container.innerHTML = '<div class="data-table-wrap"><div class="data-table-header"><span class="data-table-title">Equipment Inventory ('+total+')</span></div>' +
-      '<table class="data-table"><thead><tr><th>Description</th><th>ID Code</th><th>Category</th><th>Calibration Status</th><th>Calibration Due</th><th>Active</th><th>Actions</th></tr></thead><tbody>' +
+      '<table class="data-table"><thead><tr><th>Description</th><th>ID Code</th><th>Category</th><th>Calibration Status</th><th>Calibration Due</th><th>Certificate</th><th>Active</th><th>Actions</th></tr></thead><tbody>' +
       d.map(r => {
         const cs = r.calibration_status || 'N/A';
         const cc = cs === 'Valid' ? 'var(--success)' : cs === 'Due Soon' ? 'var(--warning)' : cs === 'Expired' ? 'var(--danger)' : 'var(--text-3)';
+        const certHtml = r.calibration_certificate_url ? '<a href="'+esc(r.calibration_certificate_url)+'" target="_blank" class="cert-link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>PDF</a>' : '—';
         return '<tr><td><strong>'+esc(r.description)+'</strong></td>' +
           '<td class="mono">'+esc(r.equipment_id_code||'—')+'</td>' +
           '<td>'+esc(r.category_name)+'</td>' +
           '<td><span class="status-badge" style="background:'+cc+'20;color:'+cc+'">'+esc(cs)+'</span></td>' +
           '<td class="mono">'+(r.calibration_due_date||'—')+'</td>' +
+          '<td>'+certHtml+'</td>' +
           '<td>'+(r.active ? 'Yes' : 'No')+'</td>' +
           '<td><div class="action-btns">' +
           '<button class="action-btn edit" onclick="editEquipment('+r.id+')" title="Edit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>' +
@@ -1072,6 +1105,15 @@ function openEquipmentModal(data) {
   document.getElementById('ef-calibstatus').value = data ? data.calibration_status || '' : '';
   document.getElementById('ef-calibdate').value = data ? data.calibration_due_date || '' : '';
   document.getElementById('ef-active').value = data ? String(data.active) : 'true';
+  document.getElementById('ef-cert-url').value = data?.calibration_certificate_url || '';
+  document.getElementById('ef-cert-file').value = '';
+  pendingCertFile = null;
+  const certName = document.getElementById('ef-cert-name');
+  if (data?.calibration_certificate_url) {
+    certName.innerHTML = '<a href="'+esc(data.calibration_certificate_url)+'" target="_blank" class="cert-link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>View current certificate</a>';
+  } else {
+    certName.textContent = '';
+  }
   openModal('equipment');
 }
 
@@ -1083,6 +1125,7 @@ async function editEquipment(id) {
 async function saveEquipment(e) {
   e.preventDefault();
   const id = document.getElementById('ef-id').value;
+  const certUrl = document.getElementById('ef-cert-url').value;
   const record = {
     description: document.getElementById('ef-description').value.trim(),
     equipment_id_code: document.getElementById('ef-code').value.trim() || null,
@@ -1092,15 +1135,30 @@ async function saveEquipment(e) {
     active: document.getElementById('ef-active').value === 'true'
   };
 
-  let error;
+  let error, savedId;
   if (id) {
     ({ error } = await sb.from('equipment').update(record).eq('id', id));
+    savedId = id;
   } else {
-    ({ error } = await sb.from('equipment').insert(record));
+    const { data, error: insertErr } = await sb.from('equipment').insert(record).select('id').single();
+    error = insertErr;
+    savedId = data?.id;
   }
 
   if (error) { toast('Error saving: ' + error.message, 'error'); return false; }
+
+  // Upload certificate if pending
+  if (pendingCertFile && savedId) {
+    const url = await uploadCertificate(savedId);
+    if (url) {
+      await sb.from('equipment').update({ calibration_certificate_url: url }).eq('id', savedId);
+    }
+  } else if (certUrl) {
+    await sb.from('equipment').update({ calibration_certificate_url: certUrl }).eq('id', savedId);
+  }
+
   toast(id ? 'Equipment updated' : 'Equipment created', 'success');
+  pendingCertFile = null;
   closeModal('equipment');
   await loadEquipment();
   return false;
@@ -1121,6 +1179,167 @@ async function confirmDelete() {
   deleteTarget = null;
   if (activeTab === 'personnel') await loadPersonnel();
   else if (activeTab === 'equipment') await loadEquipment();
+}
+
+// ─── Excel Import ───
+function excelDateToISO(v) {
+  if (!v) return null;
+  if (v instanceof Date) return isNaN(v.getTime()) ? null : v.toISOString().split('T')[0];
+  if (typeof v === 'number' && v > 25000 && v < 60000) {
+    const d = new Date((v - 25569) * 864e5);
+    return isNaN(d.getTime()) ? null : d.toISOString().split('T')[0];
+  }
+  if (typeof v === 'string') {
+    const d = new Date(v);
+    return isNaN(d.getTime()) ? null : d.toISOString().split('T')[0];
+  }
+  return null;
+}
+
+async function importExcel(input, type) {
+  const file = input.files[0];
+  if (!file) return;
+  input.value = '';
+  toast('Reading ' + file.name + '...', 'info');
+
+  const data = await file.arrayBuffer();
+  const wb = XLSX.read(data);
+
+  if (type === 'personnel') {
+    const sheetName = wb.SheetNames.find(s => s.toLowerCase().includes('planner') && !s.toLowerCase().includes('equipment')) || wb.SheetNames[0];
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName]);
+    if (!rows.length) { toast('No data found in sheet "' + sheetName + '"', 'error'); return; }
+    await importPersonnelRows(rows);
+  } else if (type === 'equipment') {
+    const sheetName = wb.SheetNames.find(s => s.toLowerCase().includes('equipment')) || wb.SheetNames[0];
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName]);
+    if (!rows.length) { toast('No data found in sheet "' + sheetName + '"', 'error'); return; }
+    await importEquipmentRows(rows);
+  }
+}
+
+async function getOrCreateLookup(table, field, value) {
+  if (!value || !value.toString().trim()) return null;
+  const v = value.toString().trim();
+  const { data } = await sb.from(table).select('id').eq(field, v).maybeSingle();
+  if (data) return data.id;
+  const { data: newRec, error } = await sb.from(table).insert({ [field]: v }).select('id').single();
+  if (error) return null;
+  return newRec.id;
+}
+
+async function importPersonnelRows(rows) {
+  let imported = 0, skipped = 0;
+  toast('Importing ' + rows.length + ' personnel records...', 'info');
+
+  for (const row of rows) {
+    const name = (row['Technician Name'] || row['Name'] || '').toString().trim();
+    if (!name) { skipped++; continue; }
+
+    const competency = (row['Competency'] || row['Designation'] || '').toString().trim();
+    const startDate = excelDateToISO(row['Start Date'] || row['Start']);
+    const endDate = excelDateToISO(row['End Date'] || row['End']);
+    const durationDays = parseInt(row['Duration (days)'] || row['Duration']) || null;
+    const status = (row['Status'] || 'Planned').toString().trim();
+    const workOrder = (row['Work Order'] || row['WO'] || '').toString().trim();
+    const scope = (row['Scope'] || '').toString().trim();
+    const clientName = (row['Client'] || '').toString().trim();
+    const installName = (row['Installation'] || '').toString().trim();
+    const classifName = (row['Support Classification'] || row['Classification'] || '').toString().trim();
+
+    // Get or create technician
+    let techId;
+    const { data: tech } = await sb.from('technicians').select('id').eq('name', name).maybeSingle();
+    if (tech) { techId = tech.id; }
+    else {
+      const { data: newTech } = await sb.from('technicians').insert({ name, competency }).select('id').single();
+      if (newTech) techId = newTech.id; else { skipped++; continue; }
+    }
+
+    const clientId = clientName ? await getOrCreateLookup('clients', 'name', clientName) : null;
+    const installId = installName ? await getOrCreateLookup('installations', 'name', installName) : null;
+    const classifId = classifName ? await getOrCreateLookup('support_classifications', 'value', classifName) : null;
+
+    const { error } = await sb.from('personnel_assignments').insert({
+      technician_id: techId,
+      start_date: startDate || new Date().toISOString().split('T')[0],
+      end_date: endDate,
+      duration_days: durationDays,
+      status: status,
+      work_order: workOrder || null,
+      scope: scope || null,
+      client_id: clientId,
+      installation_id: installId,
+      support_classification_id: classifId
+    });
+    if (error) skipped++; else imported++;
+  }
+
+  toast('Imported ' + imported + ' records' + (skipped ? ', ' + skipped + ' skipped' : ''), imported ? 'success' : 'error');
+  await loadLookups();
+  await loadPersonnel();
+}
+
+async function importEquipmentRows(rows) {
+  let imported = 0, skipped = 0;
+  toast('Importing ' + rows.length + ' equipment records...', 'info');
+
+  for (const row of rows) {
+    const desc = (row['Description & ID'] || row['Description'] || row['Equipment Name'] || row['Equipment'] || '').toString().trim();
+    if (!desc) { skipped++; continue; }
+
+    const idCode = (row['Equipment ID'] || row['ID'] || '').toString().trim();
+    const catName = (row['Category'] || row['Equipment type'] || '').toString().trim();
+    const calibDate = excelDateToISO(row['Calibration End Date'] || row['Calibration Due Date'] || row['Calibration due date']);
+    const statusRaw = (row['Status'] || row['Equipment status'] || '').toString().trim();
+
+    let calibStatus = 'N/A';
+    if (calibDate) {
+      const d = new Date(calibDate);
+      const now = new Date();
+      const diff = (d - now) / 864e5;
+      if (diff < 0) calibStatus = 'Expired';
+      else if (diff < 90) calibStatus = 'Due Soon';
+      else calibStatus = 'Valid';
+    }
+
+    const categoryId = catName ? await getOrCreateLookup('equipment_categories', 'value', catName) : null;
+
+    const { error } = await sb.from('equipment').insert({
+      description: desc,
+      equipment_id_code: idCode || null,
+      category_id: categoryId,
+      calibration_due_date: calibDate,
+      calibration_status: calibStatus,
+      active: true
+    });
+    if (error) skipped++; else imported++;
+  }
+
+  toast('Imported ' + imported + ' records' + (skipped ? ', ' + skipped + ' skipped' : ''), imported ? 'success' : 'error');
+  await loadLookups();
+  await loadEquipment();
+}
+
+// ─── PDF Upload ───
+let pendingCertFile = null;
+
+function onCertFileSelected(input) {
+  const file = input.files[0];
+  if (!file) return;
+  pendingCertFile = file;
+  document.getElementById('ef-cert-name').textContent = file.name;
+}
+
+async function uploadCertificate(equipmentId) {
+  if (!pendingCertFile) return null;
+  const ext = pendingCertFile.name.split('.').pop();
+  const path = 'equipment/' + equipmentId + '/cert_' + Date.now() + '.' + ext;
+  const { error } = await sb.storage.from('certificates').upload(path, pendingCertFile, { contentType: 'application/pdf', upsert: true });
+  if (error) { toast('Error uploading certificate: ' + error.message, 'error'); return null; }
+  const { data } = sb.storage.from('certificates').getPublicUrl(path);
+  pendingCertFile = null;
+  return data.publicUrl;
 }
 
 // ─── Close modals on overlay click ───
