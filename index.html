@@ -838,9 +838,40 @@ function renderPersonnel() {
     xaxis:{categories:ce.map(e=>e[0])}, yaxis:{labels:{style:{fontSize:'11px'},maxWidth:160}},
     dataLabels:{enabled:true,textAnchor:'start',offsetX:5,style:{fontSize:'11px'}}, legend:{show:false} };
 
+  // Classification distribution (Expat/Local/Regional)
+  const clg = groupBy(d, 'classification_name');
+  const cle = Object.keys(clg).filter(k => k !== '(blank)').sort();
+  const classifChart = { chart:{type:'donut',height:280}, series:cle.map(s=>clg[s].length), labels:cle,
+    colors:['#e76f51','#2a9d8f','#3b82f6'],
+    plotOptions:{pie:{donut:{size:'72%',labels:{show:true,total:{show:true,label:'Total',formatter:w=>fmtInt(w.globals.seriesTotals.reduce((a,b)=>a+b,0))}}}}},
+    dataLabels:{enabled:false}, legend:{position:'bottom',fontSize:'12px'}, stroke:{width:2} };
+
+  // Competency distribution
+  const cpg = groupBy(d, 'competency');
+  const cpe = Object.entries(cpg).filter(([k])=>k!=='(blank)').map(([k,v])=>[k,v.length]).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  const compChart = { chart:{type:'bar',height:280}, series:[{data:cpe.map(e=>e[1])}],
+    plotOptions:{bar:{horizontal:true,borderRadius:6,barHeight:'60%',distributed:true}}, colors:COLORS.slice(2),
+    xaxis:{categories:cpe.map(e=>e[0])}, yaxis:{labels:{style:{fontSize:'11px'},maxWidth:160}},
+    dataLabels:{enabled:true,textAnchor:'start',offsetX:5,style:{fontSize:'11px'}}, legend:{show:false} };
+
+  // Monthly assignments timeline
+  const monthMap = {};
+  d.forEach(r => { if (r.start_date) { const k = r.start_date.substring(0,7); monthMap[k] = (monthMap[k]||0)+1; }});
+  const months = Object.keys(monthMap).sort();
+  const timelineChart = { chart:{type:'area',height:280,zoom:{enabled:true}},
+    series:[{name:'Assignments',data:months.map(m=>monthMap[m])}],
+    colors:['#009aa6'],
+    fill:{type:'gradient',gradient:{shadeIntensity:1,opacityFrom:0.4,opacityTo:0.05,stops:[0,90,100]}},
+    dataLabels:{enabled:false}, stroke:{curve:'smooth',width:2.5},
+    xaxis:{categories:months,labels:{rotate:-45,style:{fontSize:'10px'}}},
+    yaxis:{labels:{formatter:v=>fmtInt(v)}}, markers:{size:0,hover:{size:5}} };
+
   const chartDefs = [{ id:'c-p-status', title:'Status Distribution', options:statusChart }];
+  if (cle.length) chartDefs.push({ id:'c-p-classif', title:'Classification', options:classifChart });
   if (ie.length) chartDefs.push({ id:'c-p-install', title:'By Installation', tag:'top 10', options:installChart });
   if (ce.length) chartDefs.push({ id:'c-p-client', title:'By Client', options:clientChart });
+  if (cpe.length) chartDefs.push({ id:'c-p-comp', title:'By Competency', tag:'top 10', options:compChart });
+  if (months.length > 1) chartDefs.push({ id:'c-p-timeline', title:'Assignments Over Time', tag:'by month', options:timelineChart, wide:true });
   buildChartGrid('charts-personnel', chartDefs);
 }
 
@@ -907,8 +938,35 @@ function renderEquipment() {
     plotOptions:{bar:{borderRadius:5,columnWidth:'55%'}}, dataLabels:{enabled:false},
     xaxis:{categories:ce.map(e=>e[0]),labels:{style:{fontSize:'10px'},rotate:-45}}, legend:{show:false} };
 
+  // Active vs Inactive
+  const activeCount = d.filter(r => r.active).length;
+  const inactiveCount = d.length - activeCount;
+  const activeChart = { chart:{type:'donut',height:280}, series:[activeCount, inactiveCount], labels:['Active','Inactive'],
+    colors:['#7ab800','#ef4444'],
+    plotOptions:{pie:{donut:{size:'72%',labels:{show:true,total:{show:true,label:'Total',formatter:w=>fmtInt(w.globals.seriesTotals.reduce((a,b)=>a+b,0))}}}}},
+    dataLabels:{enabled:false}, legend:{position:'bottom',fontSize:'12px'}, stroke:{width:2} };
+
+  // Calibration expiry timeline
+  const calibByMonth = {};
+  d.forEach(r => {
+    if (r.calibration_due_date) {
+      const k = r.calibration_due_date.substring(0,7);
+      calibByMonth[k] = (calibByMonth[k]||0)+1;
+    }
+  });
+  const calibMonths = Object.keys(calibByMonth).sort();
+  const nowKey = new Date().toISOString().substring(0,7);
+  const calibTimeColors = calibMonths.map(k => k <= nowKey ? '#ef4444' : '#2a9d8f');
+  const expiryChart = { chart:{type:'bar',height:280},
+    series:[{name:'Expiring',data:calibMonths.map(k=>calibByMonth[k])}],
+    plotOptions:{bar:{borderRadius:5,columnWidth:'60%',distributed:true}}, colors:calibTimeColors,
+    xaxis:{categories:calibMonths,labels:{style:{fontSize:'10px'},rotate:-45}},
+    yaxis:{labels:{formatter:v=>fmtInt(v)}}, dataLabels:{enabled:false}, legend:{show:false} };
+
   const chartDefs = [{ id:'c-e-calib', title:'Calibration Status', options:calibChart }];
   if (ce.length) chartDefs.push({ id:'c-e-cat', title:'By Category', options:catChart });
+  chartDefs.push({ id:'c-e-active', title:'Active vs Inactive', options:activeChart });
+  if (calibMonths.length > 1) chartDefs.push({ id:'c-e-expiry', title:'Calibration Expiry Timeline', tag:'by month', options:expiryChart, wide:true });
   buildChartGrid('charts-equipment', chartDefs);
 }
 
@@ -965,10 +1023,44 @@ function renderQuotes() {
       dataLabels:{enabled:true,textAnchor:'start',offsetX:5,style:{fontSize:'11px'},formatter:v=>fmtCur(v)}, legend:{show:false},
       tooltip:{y:{formatter:v=>fmtCur(v)}} };
 
-    buildChartGrid('charts-quotes', [
+    // Top Clients by revenue
+    const clg = {};
+    d.forEach(r => { const c = r.customer_name || '(blank)'; clg[c] = (clg[c]||0) + (+r.sum_total||0); });
+    const cle = Object.entries(clg).sort((a,b)=>b[1]-a[1]).slice(0,10);
+    const clientChart = { chart:{type:'bar',height:280}, series:[{data:cle.map(e=>e[1])}],
+      plotOptions:{bar:{horizontal:true,borderRadius:6,barHeight:'60%',distributed:true}}, colors:COLORS,
+      xaxis:{categories:cle.map(e=>e[0])}, yaxis:{labels:{style:{fontSize:'11px'},maxWidth:160}},
+      dataLabels:{enabled:true,textAnchor:'start',offsetX:5,style:{fontSize:'11px'},formatter:v=>fmtCur(v)}, legend:{show:false},
+      tooltip:{y:{formatter:v=>fmtCur(v)}} };
+
+    // Revenue timeline by month
+    const monthRev = {};
+    d.forEach(r => { if (r.quote_date) { const k = r.quote_date.substring(0,7); monthRev[k] = (monthRev[k]||0) + (+r.sum_total||0); }});
+    const qMonths = Object.keys(monthRev).sort();
+    const timeChart = { chart:{type:'area',height:280,zoom:{enabled:true}},
+      series:[{name:'Revenue',data:qMonths.map(m=>monthRev[m])}],
+      colors:['#e98300'],
+      fill:{type:'gradient',gradient:{shadeIntensity:1,opacityFrom:0.4,opacityTo:0.05,stops:[0,90,100]}},
+      dataLabels:{enabled:false}, stroke:{curve:'smooth',width:2.5},
+      xaxis:{categories:qMonths,labels:{rotate:-45,style:{fontSize:'10px'}}},
+      yaxis:{labels:{formatter:v=>fmtCur(v)}}, markers:{size:0,hover:{size:5}},
+      tooltip:{y:{formatter:v=>fmtCur(v)}} };
+
+    // Probability distribution
+    const probGroups = {'0-25':0,'26-50':0,'51-75':0,'76-100':0};
+    d.forEach(r => { const p = r.probability||0; if (p<=25) probGroups['0-25']++; else if (p<=50) probGroups['26-50']++; else if (p<=75) probGroups['51-75']++; else probGroups['76-100']++; });
+    const probChart = { chart:{type:'bar',height:280}, series:[{name:'Quotes',data:Object.values(probGroups)}],
+      colors:['#3b82f6'], plotOptions:{bar:{borderRadius:5,columnWidth:'55%'}}, dataLabels:{enabled:true},
+      xaxis:{categories:Object.keys(probGroups)}, yaxis:{labels:{formatter:v=>fmtInt(v)}}, legend:{show:false} };
+
+    const qCharts = [
       { id:'c-q-status', title:'Quote Status', options:statusChart },
       { id:'c-q-segment', title:'Revenue by Segment', options:segChart }
-    ]);
+    ];
+    if (cle.length) qCharts.push({ id:'c-q-clients', title:'Top Clients', tag:'by revenue', options:clientChart });
+    qCharts.push({ id:'c-q-prob', title:'Probability Distribution', options:probChart });
+    if (qMonths.length > 1) qCharts.push({ id:'c-q-timeline', title:'Revenue Over Time', tag:'by month', options:timeChart, wide:true });
+    buildChartGrid('charts-quotes', qCharts);
   }
 }
 
@@ -1012,7 +1104,41 @@ function renderProjects() {
     const statusChart = { chart:{type:'donut',height:280}, series:sl.map(s=>sg[s].length), labels:sl, colors:sl.map(s=>getStatusColor(s)),
       plotOptions:{pie:{donut:{size:'72%',labels:{show:true,total:{show:true,label:'Total',formatter:w=>fmtInt(w.globals.seriesTotals.reduce((a,b)=>a+b,0))}}}}},
       dataLabels:{enabled:false}, legend:{position:'bottom',fontSize:'12px'}, stroke:{width:2} };
-    buildChartGrid('charts-projects', [{ id:'c-pr-status', title:'Project Status', options:statusChart }]);
+
+    // Revenue by Installation
+    const igv = {};
+    d.forEach(r => { const i = r.installation_name || '(blank)'; igv[i] = (igv[i]||0) + (+r.po_value||0); });
+    const ie = Object.entries(igv).sort((a,b)=>b[1]-a[1]).slice(0,10);
+    const installChart = { chart:{type:'bar',height:280}, series:[{data:ie.map(e=>e[1])}],
+      plotOptions:{bar:{horizontal:true,borderRadius:6,barHeight:'60%',distributed:true}}, colors:COLORS,
+      xaxis:{categories:ie.map(e=>e[0])}, yaxis:{labels:{style:{fontSize:'11px'},maxWidth:160}},
+      dataLabels:{enabled:true,textAnchor:'start',offsetX:5,style:{fontSize:'11px'},formatter:v=>fmtCur(v)}, legend:{show:false},
+      tooltip:{y:{formatter:v=>fmtCur(v)}} };
+
+    // Revenue by Responsible
+    const rgv = {};
+    d.forEach(r => { const rr = r.responsible || '(blank)'; rgv[rr] = (rgv[rr]||0) + (+r.po_value||0); });
+    const re = Object.entries(rgv).filter(([k])=>k!=='(blank)').sort((a,b)=>b[1]-a[1]).slice(0,8);
+    const respChart = { chart:{type:'bar',height:280}, series:[{data:re.map(e=>e[1])}],
+      plotOptions:{bar:{horizontal:true,borderRadius:6,barHeight:'60%',distributed:true}}, colors:COLORS.slice(3),
+      xaxis:{categories:re.map(e=>e[0])}, yaxis:{labels:{style:{fontSize:'11px'},maxWidth:160}},
+      dataLabels:{enabled:true,textAnchor:'start',offsetX:5,style:{fontSize:'11px'},formatter:v=>fmtCur(v)}, legend:{show:false},
+      tooltip:{y:{formatter:v=>fmtCur(v)}} };
+
+    // PO Value vs Invoiced
+    const invoicedVal = d.filter(r=>r.invoice_issued).reduce((s,r)=>s+(+r.po_value||0),0);
+    const pendingVal = totalPO - invoicedVal;
+    const poInvChart = { chart:{type:'donut',height:280}, series:[invoicedVal, pendingVal], labels:['Invoiced','Pending'],
+      colors:['#7ab800','#f59e0b'],
+      plotOptions:{pie:{donut:{size:'72%',labels:{show:true,total:{show:true,label:'Total PO',formatter:()=>fmtCur(totalPO)}}}}},
+      dataLabels:{enabled:false}, legend:{position:'bottom',fontSize:'12px'}, stroke:{width:2},
+      tooltip:{y:{formatter:v=>fmtCur(v)}} };
+
+    const prCharts = [{ id:'c-pr-status', title:'Project Status', options:statusChart }];
+    if (ie.length) prCharts.push({ id:'c-pr-install', title:'Revenue by Installation', tag:'top 10', options:installChart });
+    prCharts.push({ id:'c-pr-poinv', title:'Invoiced vs Pending', options:poInvChart });
+    if (re.length) prCharts.push({ id:'c-pr-resp', title:'Top Responsible', tag:'by PO value', options:respChart });
+    buildChartGrid('charts-projects', prCharts);
   }
 }
 
