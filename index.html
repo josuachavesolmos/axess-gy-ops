@@ -221,6 +221,28 @@ textarea.form-control{min-height:80px;resize:vertical}
 .cert-link:hover{text-decoration:underline}
 .cert-link svg{width:12px;height:12px}
 
+/* ═══════════════════════ GANTT RESIZE ═══════════════════════ */
+.gantt-bar-resizable{position:relative}
+.gantt-bar-resizable .gantt-handle{position:absolute;top:0;bottom:0;width:8px;cursor:col-resize;z-index:6;opacity:0;transition:opacity .15s}
+.gantt-bar-resizable:hover .gantt-handle{opacity:1}
+.gantt-handle-left{left:-2px;border-radius:5px 0 0 5px}
+.gantt-handle-right{right:-2px;border-radius:0 5px 5px 0}
+.gantt-handle::after{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:2px;height:12px;border-radius:1px;background:rgba(255,255,255,.7);box-shadow:0 0 2px rgba(0,0,0,.3)}
+.gantt-bar-resizable:hover{box-shadow:0 0 0 2px var(--brand-light);z-index:8!important}
+.gantt-bar-resizable.dragging{opacity:.85;z-index:10!important;box-shadow:0 0 0 2px var(--warning)!important}
+.gantt-bar-ghost{position:absolute;height:22px;top:5px;border-radius:5px;border:2px dashed var(--warning);background:rgba(245,158,11,.12);pointer-events:none;z-index:5;transition:left .05s,width .05s}
+.gantt-confirm-pop{position:absolute;z-index:20;background:var(--card);border:1px solid var(--border-2);border-radius:var(--r-sm);box-shadow:var(--sh-lg);padding:10px 14px;min-width:220px;animation:modalIn .2s ease}
+.gantt-confirm-pop .pop-dates{display:flex;align-items:center;gap:6px;font-size:11px;font-family:var(--font-mono);color:var(--text);margin-bottom:8px}
+.gantt-confirm-pop .pop-dates .pop-arrow{color:var(--text-3)}
+.gantt-confirm-pop .pop-dates .pop-changed{color:var(--warning);font-weight:700}
+.gantt-confirm-pop .pop-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:var(--text-3);margin-bottom:6px}
+.gantt-confirm-pop .pop-actions{display:flex;gap:6px;justify-content:flex-end}
+.gantt-confirm-pop .pop-btn{padding:5px 14px;border-radius:var(--r-xs);font-size:11px;font-weight:600;transition:all .15s;min-height:28px}
+.gantt-confirm-pop .pop-btn-cancel{border:1px solid var(--border-2);color:var(--text-2)}
+.gantt-confirm-pop .pop-btn-cancel:hover{border-color:var(--text-3)}
+.gantt-confirm-pop .pop-btn-save{background:var(--brand-light);color:#fff}
+.gantt-confirm-pop .pop-btn-save:hover{background:var(--brand)}
+
 /* ═══════════════════════ ANIMATIONS ═══════════════════════ */
 .kpi-card,.chart-card{opacity:0;transform:translateY(16px);animation:fadeSlideUp .5s ease forwards}
 .kpi-card:nth-child(1){animation-delay:.05s}.kpi-card:nth-child(2){animation-delay:.1s}.kpi-card:nth-child(3){animation-delay:.15s}.kpi-card:nth-child(4){animation-delay:.2s}.kpi-card:nth-child(5){animation-delay:.25s}
@@ -1582,6 +1604,169 @@ function setEqGanttScale(scale) {
   renderEquipmentGantt();
 }
 
+// ═══════════════════════ GANTT DRAG-RESIZE ═══════════════════════
+function makeBarResizable(bar, opts) {
+  // opts: { minDate, dayWidth, dayMs, totalDays, origStart, origEnd, assignmentId, table, gridInner, onSaved }
+  bar.classList.add('gantt-bar-resizable');
+
+  const handleL = document.createElement('div');
+  handleL.className = 'gantt-handle gantt-handle-left';
+  const handleR = document.createElement('div');
+  handleR.className = 'gantt-handle gantt-handle-right';
+  bar.appendChild(handleL);
+  bar.appendChild(handleR);
+
+  let dragging = false, side = null, startX = 0, origLeft = 0, origWidth = 0;
+  let ghost = null, currentPop = null;
+
+  function onDown(e, s) {
+    e.stopPropagation(); e.preventDefault();
+    dragging = true; side = s;
+    startX = e.clientX;
+    origLeft = parseFloat(bar.style.left);
+    origWidth = parseFloat(bar.style.width);
+    bar.classList.add('dragging');
+
+    // Ghost preview
+    ghost = document.createElement('div');
+    ghost.className = 'gantt-bar-ghost';
+    ghost.style.left = bar.style.left;
+    ghost.style.width = bar.style.width;
+    bar.parentElement.appendChild(ghost);
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }
+
+  handleL.addEventListener('mousedown', e => onDown(e, 'left'));
+  handleR.addEventListener('mousedown', e => onDown(e, 'right'));
+
+  function onMove(e) {
+    if (!dragging) return;
+    const dx = e.clientX - startX;
+    const daySnap = opts.dayWidth;
+
+    if (side === 'right') {
+      const newW = Math.max(daySnap, origWidth + Math.round(dx / daySnap) * daySnap);
+      ghost.style.width = newW + 'px';
+    } else {
+      const snappedDx = Math.round(dx / daySnap) * daySnap;
+      const newLeft = origLeft + snappedDx;
+      const newW = origWidth - snappedDx;
+      if (newW >= daySnap && newLeft >= 0) {
+        ghost.style.left = newLeft + 'px';
+        ghost.style.width = newW + 'px';
+      }
+    }
+  }
+
+  function onUp() {
+    if (!dragging) return;
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    dragging = false;
+    bar.classList.remove('dragging');
+
+    const newLeft = parseFloat(ghost.style.left);
+    const newWidth = parseFloat(ghost.style.width);
+    ghost.remove(); ghost = null;
+
+    // Calculate new dates
+    const newStartDay = Math.round(newLeft / opts.dayWidth);
+    const newEndDay = newStartDay + Math.round(newWidth / opts.dayWidth);
+    const newStart = new Date(opts.minDate.getTime() + newStartDay * opts.dayMs);
+    const newEnd = new Date(opts.minDate.getTime() + newEndDay * opts.dayMs);
+
+    // No change?
+    if (newStart.getTime() === opts.origStart.getTime() && newEnd.getTime() === opts.origEnd.getTime()) return;
+
+    // Show confirmation popover
+    showResizeConfirm(bar, opts, newStart, newEnd, newLeft, newWidth);
+  }
+}
+
+function showResizeConfirm(bar, opts, newStart, newEnd, newLeft, newWidth) {
+  // Remove any existing popover
+  document.querySelectorAll('.gantt-confirm-pop').forEach(p => p.remove());
+
+  const fmtD = d => d.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+  const startChanged = newStart.getTime() !== opts.origStart.getTime();
+  const endChanged = newEnd.getTime() !== opts.origEnd.getTime();
+  const durDays = Math.round((newEnd - newStart) / opts.dayMs);
+
+  const pop = document.createElement('div');
+  pop.className = 'gantt-confirm-pop';
+
+  // Position the popover near the bar
+  const barRect = bar.getBoundingClientRect();
+  const gridRect = opts.gridInner.getBoundingClientRect();
+  pop.style.left = (newLeft + newWidth / 2 - 110) + 'px';
+  pop.style.top = (parseFloat(bar.style.top) + 30) + 'px';
+
+  pop.innerHTML =
+    '<div class="pop-label">Update Dates (' + durDays + ' days)</div>' +
+    '<div class="pop-dates">' +
+      '<span class="' + (startChanged ? 'pop-changed' : '') + '">' + fmtD(newStart) + '</span>' +
+      '<span class="pop-arrow">&rarr;</span>' +
+      '<span class="' + (endChanged ? 'pop-changed' : '') + '">' + fmtD(newEnd) + '</span>' +
+    '</div>' +
+    '<div class="pop-actions">' +
+      '<button class="pop-btn pop-btn-cancel">Cancel</button>' +
+      '<button class="pop-btn pop-btn-save">Confirm</button>' +
+    '</div>';
+
+  bar.parentElement.appendChild(pop);
+
+  // Preview: temporarily move bar to new position
+  const prevLeft = bar.style.left, prevWidth = bar.style.width;
+  bar.style.left = newLeft + 'px';
+  bar.style.width = newWidth + 'px';
+  bar.style.outline = '2px solid var(--warning)';
+
+  function cleanup(revert) {
+    pop.remove();
+    if (revert) {
+      bar.style.left = prevLeft;
+      bar.style.width = prevWidth;
+    }
+    bar.style.outline = '';
+  }
+
+  pop.querySelector('.pop-btn-cancel').onclick = e => { e.stopPropagation(); cleanup(true); };
+  pop.querySelector('.pop-btn-save').onclick = async e => {
+    e.stopPropagation();
+    pop.querySelector('.pop-btn-save').textContent = 'Saving...';
+    pop.querySelector('.pop-btn-save').disabled = true;
+
+    const startStr = newStart.toISOString().slice(0, 10);
+    const endStr = newEnd.toISOString().slice(0, 10);
+
+    const updates = { start_date: startStr, end_date: endStr };
+    if (opts.table === 'personnel_assignments') updates.duration_days = durDays;
+    const { error } = await sb.from(opts.table).update(updates).eq('id', opts.assignmentId);
+
+    if (error) {
+      toast('Error updating dates: ' + error.message, 'error');
+      cleanup(true);
+    } else {
+      toast('Dates updated: ' + startStr + ' → ' + endStr, 'success');
+      cleanup(false);
+      if (opts.onSaved) opts.onSaved();
+    }
+  };
+
+  // Close on click outside
+  setTimeout(() => {
+    const outsideHandler = e => {
+      if (!pop.contains(e.target) && pop.parentElement) {
+        cleanup(true);
+        document.removeEventListener('mousedown', outsideHandler);
+      }
+    };
+    document.addEventListener('mousedown', outsideHandler);
+  }, 50);
+}
+
 function renderEquipmentGantt() {
   const container = document.getElementById('equipment-gantt-view');
   container.innerHTML = '';
@@ -1601,7 +1786,7 @@ function renderEquipmentGantt() {
     const e = r.end_date ? new Date(r.end_date) : new Date(s.getTime() + 14 * 864e5);
     if (isNaN(s.getTime()) || isNaN(e.getTime())) return;
     if (!equipMap[name]) equipMap[name] = [];
-    equipMap[name].push({ start: s, end: e, client: r.client_name || '', install: r.installation_name || '', scope: r.scope || '', status: r.status || '', wo: r.work_order || '' });
+    equipMap[name].push({ id: r.id, start: s, end: e, client: r.client_name || '', install: r.installation_name || '', scope: r.scope || '', status: r.status || '', wo: r.work_order || '' });
   });
 
   const equipNames = Object.keys(equipMap).sort();
@@ -1699,6 +1884,7 @@ function renderEquipmentGantt() {
       bar.textContent = t.client + (t.scope ? ' - ' + t.scope : '');
       bar.title = eqName + '\n' + (t.client||'(no client)') + (t.scope ? '\nScope: ' + t.scope : '') + '\n' + (t.install||'') + (t.wo ? '\nWO: ' + t.wo : '') + '\n' + t.start.toLocaleDateString('en-GB') + ' → ' + t.end.toLocaleDateString('en-GB') + '\n' + t.status;
       gridRow.appendChild(bar);
+      if (t.id) makeBarResizable(bar, { minDate, dayWidth, dayMs, totalDays, origStart: t.start, origEnd: t.end, assignmentId: t.id, table: 'equipment_assignments', gridInner: inner, onSaved: () => loadEquipmentAssignments().then(() => renderEquipmentGantt()) });
     });
     inner.appendChild(gridRow);
   });
@@ -1742,7 +1928,7 @@ function renderGantt(data, containerId) {
     const e = r.end_date ? new Date(r.end_date) : new Date(s.getTime() + (r.duration_days || 14) * 864e5);
     if (isNaN(s.getTime()) || isNaN(e.getTime())) return;
     if (!techMap[name]) techMap[name] = [];
-    techMap[name].push({ start: s, end: e, client: r.client_name || '', install: r.installation_name || '', scope: r.scope || '', status: r.status || '' });
+    techMap[name].push({ id: r.id, start: s, end: e, client: r.client_name || '', install: r.installation_name || '', scope: r.scope || '', status: r.status || '' });
   });
 
   const techNames = Object.keys(techMap).sort();
@@ -1937,6 +2123,7 @@ function renderGantt(data, containerId) {
       bar.textContent = t.client ? t.client + (t.scope ? ' - ' + t.scope : '') : t.install;
       bar.title = techName + '\n' + (t.client||'(no client)') + (t.scope ? '\nScope: ' + t.scope : '') + '\n' + (t.install||'') + '\n' + t.start.toLocaleDateString('en-GB') + ' → ' + t.end.toLocaleDateString('en-GB') + '\n' + t.status;
       gridRow.appendChild(bar);
+      if (t.id) makeBarResizable(bar, { minDate, dayWidth, dayMs, totalDays, origStart: t.start, origEnd: t.end, assignmentId: t.id, table: 'personnel_assignments', gridInner: inner, onSaved: () => loadPersonnel() });
     });
 
     inner.appendChild(gridRow);
@@ -1962,6 +2149,7 @@ function renderGantt(data, containerId) {
         bar.textContent = t.scope || t.install;
         bar.title = techName + '\n' + client + (t.scope ? '\nScope: ' + t.scope : '') + '\n' + (t.install||'') + '\n' + t.start.toLocaleDateString('en-GB') + ' → ' + t.end.toLocaleDateString('en-GB') + '\n' + t.status;
         subGrid.appendChild(bar);
+        if (t.id) makeBarResizable(bar, { minDate, dayWidth, dayMs, totalDays, origStart: t.start, origEnd: t.end, assignmentId: t.id, table: 'personnel_assignments', gridInner: inner, onSaved: () => loadPersonnel() });
       });
       inner.appendChild(subGrid);
     });
