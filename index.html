@@ -664,77 +664,52 @@ function fillSelect(id, values) {
 }
 
 async function loadPersonnel() {
-  const { data, error } = await sb.from('personnel_assignments')
-    .select('*, technicians(name, competency), clients(name), installations(name), support_classifications(value)')
+  const { data, error } = await sb.from('v_personnel')
+    .select('*')
     .order('start_date', { ascending: false });
   if (error) { toast('Error loading personnel: ' + error.message, 'error'); return; }
-  state.personnel.raw = (data || []).map(r => ({
-    ...r,
-    technician_name: r.technicians?.name || '',
-    competency: r.technicians?.competency || '',
-    client_name: r.clients?.name || '',
-    installation_name: r.installations?.name || '',
-    classification_name: r.support_classifications?.value || ''
-  }));
+  state.personnel.raw = data || [];
   state.personnel.filtered = [...state.personnel.raw];
   document.getElementById('badge-personnel').textContent = state.personnel.raw.length;
   renderPersonnel();
 }
 
 async function loadEquipment() {
-  const { data, error } = await sb.from('equipment')
-    .select('*, equipment_categories(value)')
+  const { data, error } = await sb.from('v_equipment')
+    .select('*')
     .order('description');
   if (error) { toast('Error loading equipment: ' + error.message, 'error'); return; }
-  state.equipment.raw = (data || []).map(r => ({
-    ...r,
-    category_name: r.equipment_categories?.value || ''
-  }));
+  state.equipment.raw = data || [];
   state.equipment.filtered = [...state.equipment.raw];
   document.getElementById('badge-equipment').textContent = state.equipment.raw.length;
   renderEquipment();
 }
 
 async function loadEquipmentAssignments() {
-  const { data, error } = await sb.from('equipment_assignments')
-    .select('*, equipment(description, equipment_id_code), clients(name), installations(name)')
+  const { data, error } = await sb.from('v_equipment_assignments')
+    .select('*')
     .order('start_date', { ascending: false });
   if (error) return;
-  state.equipAssign.raw = (data || []).map(r => ({
-    ...r,
-    equipment_name: r.equipment?.description || '',
-    equipment_code: r.equipment?.equipment_id_code || '',
-    client_name: r.clients?.name || '',
-    installation_name: r.installations?.name || ''
-  }));
+  state.equipAssign.raw = data || [];
 }
 
 async function loadQuotes() {
-  const { data, error } = await sb.from('quotes')
-    .select('*, clients:customer_id(name), installations(name), segments(value)')
+  const { data, error } = await sb.from('v_quotes')
+    .select('*')
     .order('quote_date', { ascending: false });
   if (error) { toast('Error loading quotes: ' + error.message, 'error'); return; }
-  state.quotes.raw = (data || []).map(r => ({
-    ...r,
-    customer_name: r.clients?.name || '',
-    installation_name: r.installations?.name || '',
-    segment_name: r.segments?.value || ''
-  }));
+  state.quotes.raw = data || [];
   state.quotes.filtered = [...state.quotes.raw];
   document.getElementById('badge-quotes').textContent = state.quotes.raw.length;
   renderQuotes();
 }
 
 async function loadProjects() {
-  const { data, error } = await sb.from('projects')
-    .select('*, clients(name), installations(name)')
+  const { data, error } = await sb.from('v_projects')
+    .select('*')
     .order('created_at', { ascending: false });
   if (error) { toast('Error loading projects: ' + error.message, 'error'); return; }
-  state.projects.raw = (data || []).map(r => ({
-    ...r,
-    client_name: r.clients?.name || '',
-    installation_name: r.installations?.name || ''
-  }));
+  state.projects.raw = data || [];
   state.projects.filtered = [...state.projects.raw];
   document.getElementById('badge-projects').textContent = state.projects.raw.length;
   renderProjects();
@@ -934,9 +909,9 @@ function renderEquipment() {
   const d = state.equipment.filtered;
   const total = d.length;
   const active = d.filter(r => r.active).length;
-  const valid = d.filter(r => r.calibration_status === 'Valid').length;
-  const dueSoon = d.filter(r => r.calibration_status === 'Due Soon').length;
-  const expired = d.filter(r => r.calibration_status === 'Expired').length;
+  const valid = d.filter(r => (r.computed_calibration_status || r.calibration_status) === 'Valid').length;
+  const dueSoon = d.filter(r => (r.computed_calibration_status || r.calibration_status) === 'Due Soon').length;
+  const expired = d.filter(r => (r.computed_calibration_status || r.calibration_status) === 'Expired').length;
 
   renderKPIs('kpi-equipment', [
     { label: 'Total Equipment', value: total, format: 'int', accent: 'var(--brand)' },
