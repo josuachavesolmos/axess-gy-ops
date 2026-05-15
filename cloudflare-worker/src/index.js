@@ -739,19 +739,22 @@ export default {
     const path = url.pathname.replace(/\/+$/, '');
 
     try {
+      // NOTE: `return await` is REQUIRED so the try/catch sees rejections from
+      // the handlers' returned promises. Without await, throws bubble past the
+      // catch and Cloudflare wraps them as raw 1101 errors (no CORS headers).
       // auth
-      if (path === '/auth/login'  && req.method === 'POST') return handleLogin(req, env, headers);
-      if (path === '/auth/verify' && req.method === 'GET')  return handleVerify(req, env, headers);
-      if (path === '/auth/logout' && req.method === 'POST') return handleLogout(req, env, headers);
+      if (path === '/auth/login'  && req.method === 'POST') return await handleLogin(req, env, headers);
+      if (path === '/auth/verify' && req.method === 'GET')  return await handleVerify(req, env, headers);
+      if (path === '/auth/logout' && req.method === 'POST') return await handleLogout(req, env, headers);
       // data
-      if (path === '/data/import'   && req.method === 'POST') return handleDataImport(req, env, headers);
-      if (path === '/data/snapshot' && req.method === 'GET')  return handleDataSnapshot(req, env, headers, url);
-      if (path === '/data/history'  && req.method === 'GET')  return handleDataHistory(req, env, headers, url);
+      if (path === '/data/import'   && req.method === 'POST') return await handleDataImport(req, env, headers);
+      if (path === '/data/snapshot' && req.method === 'GET')  return await handleDataSnapshot(req, env, headers, url);
+      if (path === '/data/history'  && req.method === 'GET')  return await handleDataHistory(req, env, headers, url);
       const batchMatch = path.match(/^\/data\/batch\/(\d+)$/);
-      if (batchMatch && req.method === 'DELETE') return handleDataBatchDelete(req, env, headers, batchMatch[1]);
+      if (batchMatch && req.method === 'DELETE') return await handleDataBatchDelete(req, env, headers, batchMatch[1]);
       // assistant (AI)
-      if (path === '/assistant/ask'      && req.method === 'POST') return handleAssistantAsk(req, env, headers);
-      if (path === '/assistant/insights' && req.method === 'POST') return handleAssistantInsights(req, env, headers);
+      if (path === '/assistant/ask'      && req.method === 'POST') return await handleAssistantAsk(req, env, headers);
+      if (path === '/assistant/insights' && req.method === 'POST') return await handleAssistantInsights(req, env, headers);
       // misc
       if (path === '/health' && req.method === 'GET') return jsonResponse({ status: 'ok' }, 200, headers);
       return jsonResponse({ error: 'not found', path }, 404, headers);
