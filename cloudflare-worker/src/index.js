@@ -484,6 +484,242 @@ async function handleDataBatchDelete(req, env, headers, batchId) {
   return jsonResponse({ ok: true, deleted: res.meta?.changes || 0, batch_id: id }, 200, headers);
 }
 
+// ─────────────────────── AI assistant ───────────────────────
+
+const ANTHROPIC_MODEL  = 'claude-haiku-4-5-20251001';
+const ANTHROPIC_API    = 'https://api.anthropic.com/v1/messages';
+const RATE_LIMIT_DAILY = 50;            // max AI calls per user per day
+const RATE_LIMIT_TTL_SECONDS = 36 * 3600;
+
+const SYSTEM_ASK = `You are the data assistant for the Axess Group Guyana operations dashboard.
+Answer the user's question using ONLY the JSON CONTEXT provided.
+
+Rules:
+1. Be concise — 1 to 3 sentences max.
+2. Use only the figures present in CONTEXT. Never invent numbers.
+3. If the question falls outside operations or cannot be answered from CONTEXT,
+   say so briefly and suggest what data would be needed.
+4. Match the user's language (Spanish or English).
+5. When mentioning a work order, client, technician, or quote, quote the value verbatim.
+6. If the user asks for "what should I focus on" / "action items", point to specific
+   records (with their identifiers) and one short reason each.
+
+Today is {TODAY}.`;
+
+const SYSTEM_INSIGHTS = `You generate "Today's Highlights" for the Axess GY operations dashboard.
+Read the JSON CONTEXT and produce 3 to 5 actionable highlights.
+
+Output: a JSON array of objects with shape:
+  { "severity": "high"|"medium"|"low", "icon": "<single emoji>", "title": "<<=8 words>", "detail": "<<=25 words>" }
+
+Priorities (highest first):
+- Calibrations expired or expiring within 30 days.
+- WOs with at least one QA step in "Not completed".
+- WOs in Ongoing status with end_date already past.
+- Stale quotes still "Sent" past validity_date.
+- Clients with the largest PO value but lowest invoiced ratio.
+
+Return ONLY the JSON array. No prose, no markdown fences, no explanation.
+Default language: Spanish.`;
+
+async function buildAssistantContext(env) {
+  const NOT_DONE_FRAGMENT = `
+    (qa_000 = 'Completed' OR qa_000 = 'Not applicable' OR qa_000 IS NULL OR qa_000 = '') AND
+    (qa_100 = 'Completed' OR qa_100 = 'Not applicable' OR qa_100 IS NULL OR qa_100 = '') AND
+    (qa_200 = 'Completed' OR qa_200 = 'Not applicable' OR qa_200 IS NULL OR qa_200 = '') AND
+    (qa_300 = 'Completed' OR qa_300 = 'Not applicable' OR qa_300 IS NULL OR qa_300 = '') AND
+    (qa_400 = 'Completed' OR qa_400 = 'Not applicable' OR qa_400 IS NULL OR qa_400 = '') AND
+    (qa_500 = 'Completed' OR qa_500 = 'Not applicable' OR qa_500 IS NULL OR qa_500 = '') AND
+    (qa_600 = 'Completed' OR qa_600 = 'Not applicable' OR qa_600 IS NULL OR qa_600 = '') AND
+    (qa_700 = 'Completed' OR qa_700 = 'Not applicable' OR qa_700 IS NULL OR qa_700 = '') AND
+    (qa_800 = 'Completed' OR qa_800 = 'Not applicable' OR qa_800 IS NULL OR qa_800 = '') AND
+    (qa_900 = 'Completed' OR qa_900 = 'Not applicable' OR qa_900 IS NULL OR qa_900 = '')`;
+
+  const HAS_NOT_COMPLETED = `(
+    qa_000 LIKE '%Not completed%' OR qa_100 LIKE '%Not completed%' OR
+    qa_200 LIKE '%Not completed%' OR qa_300 LIKE '%Not completed%' OR
+    qa_400 LIKE '%Not completed%' OR qa_500 LIKE '%Not completed%' OR
+    qa_600 LIKE '%Not completed%' OR qa_700 LIKE '%Not completed%' OR
+    qa_800 LIKE '%Not completed%' OR qa_900 LIKE '%Not completed%')`;
+
+  const [
+    masterStats, masterQa, masterOverdue, masterStatus, masterByClient, masterRedSample,
+    personnelStats, personnelByStatus, personnelByTech,
+    equipmentStats, equipmentCalib, equipmentExpiredList,
+    quoteStats, quoteByStatus,
+    leadsStats, leadsByStatus, leadsByResp
+  ] = await Promise.all([
+    env.DB.prepare(`SELECT COUNT(*) as total, COALESCE(SUM(po_value),0) as total_po,
+                           COALESCE(SUM(revenue_to_date),0) as total_invoiced,
+                           COALESCE(AVG(cmr_to_date),0) as avg_cmr
+                    FROM v_master_current`).first(),
+    env.DB.prepare(`SELECT COUNT(*) as total,
+                           SUM(CASE WHEN ${NOT_DONE_FRAGMENT} THEN 1 ELSE 0 END) as compliant,
+                           SUM(CASE WHEN ${HAS_NOT_COMPLETED} THEN 1 ELSE 0 END) as has_not_completed
+                    FROM v_master_current`).first(),
+    env.DB.prepare(`SELECT COUNT(*) as overdue FROM v_master_current
+                    WHERE end_date IS NOT NULL AND end_date < date('now')
+                      AND COALESCE(status,'') NOT LIKE '%omplet%'
+                      AND COALESCE(status,'') NOT LIKE '%losed%'
+                      AND COALESCE(status,'') NOT LIKE '%ancel%'`).first(),
+    env.DB.prepare(`SELECT status, COUNT(*) as c FROM v_master_current
+                    WHERE status IS NOT NULL GROUP BY status ORDER BY c DESC LIMIT 10`).all(),
+    env.DB.prepare(`SELECT client, COUNT(*) as wos, COALESCE(SUM(po_value),0) as po,
+                           COALESCE(SUM(revenue_to_date),0) as invoiced
+                    FROM v_master_current WHERE client IS NOT NULL
+                    GROUP BY client ORDER BY po DESC LIMIT 5`).all(),
+    env.DB.prepare(`SELECT workorder, client, status, po_value FROM v_master_current
+                    WHERE ${HAS_NOT_COMPLETED} LIMIT 5`).all(),
+    env.DB.prepare(`SELECT COUNT(*) as total, COUNT(DISTINCT technician_name) as techs
+                    FROM v_personnel_current`).first(),
+    env.DB.prepare(`SELECT status, COUNT(*) as c FROM v_personnel_current
+                    WHERE status IS NOT NULL GROUP BY status ORDER BY c DESC LIMIT 8`).all(),
+    env.DB.prepare(`SELECT technician_name, COUNT(*) as c FROM v_personnel_current
+                    WHERE technician_name IS NOT NULL GROUP BY technician_name ORDER BY c DESC LIMIT 5`).all(),
+    env.DB.prepare(`SELECT COUNT(*) as total FROM v_equipment_current`).first(),
+    env.DB.prepare(`SELECT
+        COUNT(CASE WHEN calibration_due_date IS NOT NULL AND calibration_due_date < date('now') THEN 1 END) as expired,
+        COUNT(CASE WHEN calibration_due_date IS NOT NULL
+                    AND calibration_due_date BETWEEN date('now') AND date('now','+30 days') THEN 1 END) as expiring_30d,
+        COUNT(CASE WHEN calibration_due_date IS NOT NULL AND calibration_due_date > date('now','+30 days') THEN 1 END) as ok
+      FROM v_equipment_current`).first(),
+    env.DB.prepare(`SELECT description, calibration_due_date FROM v_equipment_current
+                    WHERE calibration_due_date IS NOT NULL
+                      AND calibration_due_date < date('now','+30 days')
+                    ORDER BY calibration_due_date ASC LIMIT 8`).all(),
+    env.DB.prepare(`SELECT COUNT(*) as total, COALESCE(SUM(sum_total_base_currency),0) as total_revenue,
+                           COALESCE(SUM(cost_sum_total),0) as total_cost
+                    FROM v_quotes_current`).first(),
+    env.DB.prepare(`SELECT status, COUNT(*) as c, COALESCE(SUM(sum_total_base_currency),0) as revenue
+                    FROM v_quotes_current WHERE status IS NOT NULL
+                    GROUP BY status ORDER BY c DESC LIMIT 8`).all(),
+    env.DB.prepare(`SELECT COUNT(*) as total FROM v_leads_current`).first(),
+    env.DB.prepare(`SELECT status, COUNT(*) as c FROM v_leads_current
+                    WHERE status IS NOT NULL GROUP BY status ORDER BY c DESC LIMIT 6`).all(),
+    env.DB.prepare(`SELECT responsible, COUNT(*) as c FROM v_leads_current
+                    WHERE responsible IS NOT NULL GROUP BY responsible ORDER BY c DESC LIMIT 5`).all()
+  ]);
+
+  return {
+    today: new Date().toISOString().slice(0, 10),
+    master: {
+      total: masterStats?.total || 0,
+      total_po_value: Math.round(masterStats?.total_po || 0),
+      total_invoiced: Math.round(masterStats?.total_invoiced || 0),
+      avg_cmr_pct: Math.round((masterStats?.avg_cmr || 0) * 1000) / 10,
+      qa_compliance_pct: masterQa?.total
+        ? Math.round(((masterQa.compliant || 0) / masterQa.total) * 1000) / 10 : 0,
+      qa_wos_with_not_completed: masterQa?.has_not_completed || 0,
+      overdue_count: masterOverdue?.overdue || 0,
+      by_status: masterStatus?.results || [],
+      top_clients_by_po: masterByClient?.results || [],
+      sample_red_wos: masterRedSample?.results || []
+    },
+    personnel: {
+      total_assignments: personnelStats?.total || 0,
+      unique_technicians: personnelStats?.techs || 0,
+      by_status: personnelByStatus?.results || [],
+      top_technicians: personnelByTech?.results || []
+    },
+    equipment: {
+      total: equipmentStats?.total || 0,
+      calibration_expired: equipmentCalib?.expired || 0,
+      calibration_expiring_30d: equipmentCalib?.expiring_30d || 0,
+      calibration_ok: equipmentCalib?.ok || 0,
+      sample_expiring: equipmentExpiredList?.results || []
+    },
+    quote: {
+      total: quoteStats?.total || 0,
+      total_revenue_base_currency: Math.round(quoteStats?.total_revenue || 0),
+      total_cost: Math.round(quoteStats?.total_cost || 0),
+      by_status: quoteByStatus?.results || []
+    },
+    leads: {
+      total: leadsStats?.total || 0,
+      by_status: leadsByStatus?.results || [],
+      top_responsible: leadsByResp?.results || []
+    }
+  };
+}
+
+async function checkAIRateLimit(env, username) {
+  const today = new Date().toISOString().slice(0, 10);
+  const key = 'ratelimit:ai:' + username + ':' + today;
+  const current = parseInt((await env.USERS.get(key)) || '0', 10);
+  if (current >= RATE_LIMIT_DAILY) {
+    throw new HttpError(429, 'Daily AI quota reached (' + RATE_LIMIT_DAILY + '). Resets at midnight UTC.');
+  }
+  await env.USERS.put(key, String(current + 1), { expirationTtl: RATE_LIMIT_TTL_SECONDS });
+  return { used: current + 1, max: RATE_LIMIT_DAILY };
+}
+
+async function callAnthropic(env, system, userContent, maxTokens) {
+  const res = await fetch(ANTHROPIC_API, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': env.ANTHROPIC_API_KEY,
+      'anthropic-version': '2023-06-01'
+    },
+    body: JSON.stringify({
+      model: ANTHROPIC_MODEL,
+      max_tokens: maxTokens || 400,
+      system,
+      messages: [{ role: 'user', content: userContent }]
+    })
+  });
+  let body; try { body = await res.json(); } catch { body = {}; }
+  if (!res.ok) throw new HttpError(502, 'Anthropic API error · ' + (body?.error?.message || ('HTTP ' + res.status)));
+  const text = (body.content && body.content[0] && body.content[0].text) || '';
+  return { text, usage: body.usage || {}, model: body.model || ANTHROPIC_MODEL };
+}
+
+async function handleAssistantAsk(req, env, headers) {
+  if (!env.ANTHROPIC_API_KEY) throw new HttpError(500, 'ANTHROPIC_API_KEY not configured');
+  const user = await requireJWT(req, env);
+
+  let body; try { body = await req.json(); } catch { return jsonResponse({ error: 'invalid JSON body' }, 400, headers); }
+  const question = String(body.question || '').trim().slice(0, 1000);
+  if (!question) return jsonResponse({ error: 'question is required' }, 400, headers);
+
+  const quota = await checkAIRateLimit(env, user.sub);
+  const ctx = await buildAssistantContext(env);
+  const system = SYSTEM_ASK.replace('{TODAY}', ctx.today);
+  const userContent = 'CONTEXT (JSON):\n' + JSON.stringify(ctx) + '\n\nUser question: ' + question;
+
+  const result = await callAnthropic(env, system, userContent, 400);
+  return jsonResponse({
+    answer: result.text,
+    model: result.model,
+    usage: result.usage,
+    quota
+  }, 200, headers);
+}
+
+async function handleAssistantInsights(req, env, headers) {
+  if (!env.ANTHROPIC_API_KEY) throw new HttpError(500, 'ANTHROPIC_API_KEY not configured');
+  const user = await requireJWT(req, env);
+
+  const quota = await checkAIRateLimit(env, user.sub);
+  const ctx = await buildAssistantContext(env);
+  const userContent = 'CONTEXT (JSON):\n' + JSON.stringify(ctx);
+  const result = await callAnthropic(env, SYSTEM_INSIGHTS, userContent, 600);
+
+  let highlights = [];
+  try {
+    const m = result.text.match(/\[[\s\S]*\]/);
+    if (m) highlights = JSON.parse(m[0]);
+  } catch (e) { /* graceful fallback */ }
+
+  return jsonResponse({
+    highlights,
+    raw: result.text,
+    model: result.model,
+    usage: result.usage,
+    quota
+  }, 200, headers);
+}
+
 // ─────────────────────── Worker entry ───────────────────────
 
 export default {
@@ -513,6 +749,9 @@ export default {
       if (path === '/data/history'  && req.method === 'GET')  return handleDataHistory(req, env, headers, url);
       const batchMatch = path.match(/^\/data\/batch\/(\d+)$/);
       if (batchMatch && req.method === 'DELETE') return handleDataBatchDelete(req, env, headers, batchMatch[1]);
+      // assistant (AI)
+      if (path === '/assistant/ask'      && req.method === 'POST') return handleAssistantAsk(req, env, headers);
+      if (path === '/assistant/insights' && req.method === 'POST') return handleAssistantInsights(req, env, headers);
       // misc
       if (path === '/health' && req.method === 'GET') return jsonResponse({ status: 'ok' }, 200, headers);
       return jsonResponse({ error: 'not found', path }, 404, headers);

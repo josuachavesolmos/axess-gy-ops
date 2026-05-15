@@ -208,6 +208,48 @@
     return { batches: body.batches || [] };
   }
 
+  // ─────────────────────── AI assistant ───────────────────────
+
+  /** POST /assistant/ask — returns { answer, model, usage, quota } or { error }. */
+  async function askAssistant(question) {
+    if (AUTH_DISABLED) return { error: 'AI disabled (dev mode)' };
+    const t = getToken();
+    if (!t) return { error: 'no auth token' };
+    let res;
+    try {
+      res = await fetch(WORKER_URL + '/assistant/ask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + t },
+        body: JSON.stringify({ question })
+      });
+    } catch (e) {
+      return { error: 'Network error · ' + (e.message || 'fetch failed') };
+    }
+    let body; try { body = await res.json(); } catch { body = {}; }
+    if (!res.ok) return { error: body.error || ('HTTP ' + res.status), status: res.status, quota: body.quota };
+    return body;
+  }
+
+  /** POST /assistant/insights — returns { highlights, raw, model, usage, quota }. */
+  async function fetchInsights() {
+    if (AUTH_DISABLED) return { highlights: [], skipped: true };
+    const t = getToken();
+    if (!t) return { highlights: [], error: 'no auth token' };
+    let res;
+    try {
+      res = await fetch(WORKER_URL + '/assistant/insights', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + t },
+        body: JSON.stringify({})
+      });
+    } catch (e) {
+      return { highlights: [], error: 'Network error · ' + e.message };
+    }
+    let body; try { body = await res.json(); } catch { body = {}; }
+    if (!res.ok) return { highlights: [], error: body.error || ('HTTP ' + res.status), status: res.status };
+    return body;
+  }
+
   window.AxessAuth = {
     WORKER_URL,
     login,
@@ -216,6 +258,8 @@
     pushDataset,
     fetchSnapshot,
     fetchHistory,
+    askAssistant,
+    fetchInsights,
     requireAuth,
     getToken,
     clearToken,

@@ -112,6 +112,80 @@ button{cursor:pointer}
 .user-chip-logout svg{width:14px;height:14px}
 @media (max-width:900px){.user-chip-name{display:none}.user-chip{padding:4px}}
 
+/* ─── AI Assistant ─── */
+.ai-btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:24px;border:1.5px solid var(--brand-light);background:linear-gradient(135deg,rgba(0,99,109,.08),rgba(51,184,194,.08));font-size:12px;font-weight:600;color:var(--brand);cursor:pointer;transition:all .2s;min-height:36px;font-family:inherit}
+.ai-btn:hover{background:linear-gradient(135deg,rgba(0,99,109,.15),rgba(51,184,194,.15));border-color:var(--brand);transform:translateY(-1px)}
+.ai-btn svg{width:14px;height:14px}
+.ai-btn .ai-btn-pulse{width:6px;height:6px;border-radius:50%;background:var(--brand-glow);animation:aiPulse 2s ease-in-out infinite}
+@keyframes aiPulse{0%,100%{opacity:.4}50%{opacity:1}}
+
+.ai-sidebar{position:fixed;top:0;right:0;bottom:0;width:420px;max-width:100vw;background:var(--card);border-left:1px solid var(--border);z-index:9500;display:flex;flex-direction:column;transform:translateX(105%);transition:transform .3s cubic-bezier(.4,.0,.2,1);box-shadow:-10px 0 40px rgba(0,0,0,.08)}
+.ai-sidebar.open{transform:translateX(0)}
+.ai-sidebar-overlay{position:fixed;inset:0;background:rgba(17,24,39,.3);z-index:9400;opacity:0;pointer-events:none;transition:opacity .25s}
+.ai-sidebar-overlay.show{opacity:1;pointer-events:auto}
+
+.ai-sidebar-header{padding:16px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,rgba(0,99,109,.04),rgba(51,184,194,.04))}
+.ai-sidebar-title{display:flex;align-items:center;gap:10px}
+.ai-sidebar-title-icon{width:32px;height:32px;border-radius:10px;background:linear-gradient(135deg,var(--brand),var(--brand-glow));display:flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0}
+.ai-sidebar-title-icon svg{width:18px;height:18px}
+.ai-sidebar-title-text{display:flex;flex-direction:column;line-height:1.2}
+.ai-sidebar-title-text strong{font-size:14px;font-weight:700;color:var(--text)}
+.ai-sidebar-title-text small{font-size:10px;color:var(--text-3);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.6px}
+.ai-sidebar-close{width:32px;height:32px;border-radius:8px;border:none;background:transparent;color:var(--text-3);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s}
+.ai-sidebar-close:hover{background:var(--bg);color:var(--text)}
+.ai-sidebar-close svg{width:16px;height:16px}
+
+.ai-sidebar-body{flex:1;overflow-y:auto;padding:14px 18px;display:flex;flex-direction:column;gap:14px}
+
+.ai-insights-section{display:flex;flex-direction:column;gap:8px}
+.ai-section-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-3);display:flex;align-items:center;justify-content:space-between}
+.ai-section-label a{color:var(--brand-light);text-decoration:none;font-weight:600;cursor:pointer}
+.ai-section-label a:hover{text-decoration:underline}
+
+.ai-highlight{padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:var(--bg);display:flex;gap:10px;align-items:flex-start;animation:aiSlideIn .25s ease}
+.ai-highlight.severity-high{border-left:3px solid #ef4444;background:rgba(239,68,68,.04)}
+.ai-highlight.severity-medium{border-left:3px solid #e98300;background:rgba(233,131,0,.04)}
+.ai-highlight.severity-low{border-left:3px solid #7ab800;background:rgba(122,184,0,.04)}
+.ai-highlight-icon{font-size:18px;line-height:1;flex-shrink:0}
+.ai-highlight-body{flex:1;min-width:0}
+.ai-highlight-title{font-size:12px;font-weight:700;color:var(--text);margin-bottom:2px}
+.ai-highlight-detail{font-size:11px;color:var(--text-2);line-height:1.4}
+@keyframes aiSlideIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+
+.ai-chat-area{display:flex;flex-direction:column;gap:10px}
+.ai-message{display:flex;gap:10px;animation:aiSlideIn .2s ease;max-width:100%}
+.ai-message.user{flex-direction:row-reverse}
+.ai-message-avatar{width:26px;height:26px;border-radius:8px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff}
+.ai-message.user .ai-message-avatar{background:var(--text-2)}
+.ai-message.assistant .ai-message-avatar{background:linear-gradient(135deg,var(--brand),var(--brand-glow))}
+.ai-message-bubble{padding:9px 12px;border-radius:12px;font-size:13px;line-height:1.5;color:var(--text);max-width:calc(100% - 38px);word-wrap:break-word}
+.ai-message.user .ai-message-bubble{background:var(--bg);border:1px solid var(--border)}
+.ai-message.assistant .ai-message-bubble{background:linear-gradient(135deg,rgba(0,99,109,.06),rgba(51,184,194,.06));border:1px solid rgba(0,99,109,.15)}
+.ai-message.error .ai-message-bubble{background:#fef2f2;border:1px solid #fecaca;color:#b91c1c}
+.ai-message-bubble strong{font-weight:700}
+.ai-message-bubble code{font-family:var(--font-mono);background:rgba(0,0,0,.06);padding:1px 4px;border-radius:3px;font-size:11px}
+
+.ai-typing{display:flex;gap:4px;padding:8px 12px}
+.ai-typing span{width:6px;height:6px;border-radius:50%;background:var(--brand-light);animation:aiTyping 1.2s ease-in-out infinite}
+.ai-typing span:nth-child(2){animation-delay:.15s}
+.ai-typing span:nth-child(3){animation-delay:.3s}
+@keyframes aiTyping{0%,60%,100%{opacity:.3;transform:scale(.8)}30%{opacity:1;transform:scale(1)}}
+
+.ai-input-area{padding:12px 14px;border-top:1px solid var(--border);background:var(--card);display:flex;flex-direction:column;gap:8px}
+.ai-suggestions{display:flex;flex-wrap:wrap;gap:5px}
+.ai-suggestion{padding:5px 10px;font-size:11px;color:var(--brand);background:rgba(0,99,109,.06);border:1px solid rgba(0,99,109,.18);border-radius:14px;cursor:pointer;transition:all .15s;font-family:inherit}
+.ai-suggestion:hover{background:rgba(0,99,109,.12);border-color:var(--brand-light)}
+.ai-input-row{display:flex;gap:8px;align-items:flex-end}
+.ai-input{flex:1;padding:9px 12px;font-size:13px;font-family:inherit;border:1.5px solid var(--border-2);border-radius:10px;background:var(--bg);color:var(--text);resize:none;outline:none;min-height:38px;max-height:120px;line-height:1.4}
+.ai-input:focus{border-color:var(--brand-light);background:var(--card);box-shadow:0 0 0 3px rgba(0,154,166,.1)}
+.ai-send{width:38px;height:38px;border-radius:10px;border:none;background:var(--brand);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0}
+.ai-send:hover:not(:disabled){background:var(--brand-light);transform:translateY(-1px)}
+.ai-send:disabled{opacity:.5;cursor:not-allowed}
+.ai-send svg{width:16px;height:16px}
+.ai-quota{font-size:10px;color:var(--text-3);text-align:right;font-family:var(--font-mono)}
+
+@media (max-width:600px){.ai-sidebar{width:100vw}}
+
 /* ═══════════════════════ MAIN CONTENT ═══════════════════════ */
 .main{margin-left:var(--sidebar-w);min-height:100vh;transition:margin-left .35s cubic-bezier(.4,0,.2,1)}
 .sidebar.collapsed~.main{margin-left:var(--sidebar-cw)}
@@ -435,6 +509,50 @@ select.filter-input{appearance:none;background-image:url("data:image/svg+xml,%3C
     <div class="lic-meta" id="lic-block-meta"></div>
   </div>
 </div>
+<!-- AI Assistant sidebar -->
+<div class="ai-sidebar-overlay" id="ai-sidebar-overlay" onclick="closeAISidebar()"></div>
+<aside class="ai-sidebar" id="ai-sidebar" aria-hidden="true" aria-label="AI assistant">
+  <div class="ai-sidebar-header">
+    <div class="ai-sidebar-title">
+      <div class="ai-sidebar-title-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+      </div>
+      <div class="ai-sidebar-title-text">
+        <strong>Axess AI</strong>
+        <small>Claude Haiku · Powered by Anthropic</small>
+      </div>
+    </div>
+    <button class="ai-sidebar-close" id="ai-close-btn" onclick="closeAISidebar()" aria-label="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="ai-sidebar-body" id="ai-sidebar-body">
+    <div class="ai-insights-section" id="ai-insights-section">
+      <div class="ai-section-label">
+        <span>Today's Highlights</span>
+        <a id="ai-refresh-insights" onclick="loadAIInsights()">↻ Refresh</a>
+      </div>
+      <div id="ai-insights-list"></div>
+    </div>
+    <div class="ai-chat-area" id="ai-chat-area"></div>
+  </div>
+  <div class="ai-input-area">
+    <div class="ai-suggestions" id="ai-suggestions">
+      <button class="ai-suggestion" onclick="askAISuggestion(this)">¿Cuántas WO tienen QA Not completed?</button>
+      <button class="ai-suggestion" onclick="askAISuggestion(this)">¿Qué calibraciones están próximas a vencer?</button>
+      <button class="ai-suggestion" onclick="askAISuggestion(this)">Top 3 clientes por PO value</button>
+      <button class="ai-suggestion" onclick="askAISuggestion(this)">¿Qué WO debería priorizar hoy?</button>
+    </div>
+    <div class="ai-input-row">
+      <textarea class="ai-input" id="ai-input" rows="1" placeholder="Pregúntale sobre WO, calibraciones, técnicos, KPIs..." onkeydown="onAIInputKey(event)"></textarea>
+      <button class="ai-send" id="ai-send-btn" onclick="sendAIQuestion()" aria-label="Send">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+      </button>
+    </div>
+    <div class="ai-quota" id="ai-quota"></div>
+  </div>
+</aside>
+
 <div class="toast-container" id="toasts" aria-live="polite"></div>
 
 <!-- ═══════════════════════ SIDEBAR ═══════════════════════ -->
@@ -528,6 +646,11 @@ select.filter-input{appearance:none;background-image:url("data:image/svg+xml,%3C
       <button class="btn-export" onclick="exportCharts()" aria-label="Export charts as PNG">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         Export
+      </button>
+      <button class="ai-btn" id="ai-open-btn" onclick="openAISidebar()" aria-label="Open AI assistant">
+        <span class="ai-btn-pulse" aria-hidden="true"></span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+        Ask AI
       </button>
       <div class="user-chip" id="user-chip" title="Signed in">
         <span class="user-chip-avatar" id="user-chip-avatar">·</span>
@@ -5509,6 +5632,166 @@ async function hydrateFromD1() {
     if (d) d.className = (d.classList.contains('mini') ? 'pill-dot mini loaded' : 'pill-dot loaded');
   }));
   return hydrated;
+}
+
+// ════════════════════════ AI Assistant ════════════════════════
+let _aiInsightsLoaded = false;
+let _aiSending = false;
+const _aiHistory = []; // in-memory conversation history (resets on reload)
+
+function _aiSafeText(s) {
+  // Escape HTML, then render simple **bold** and `code` as markdown-lite.
+  const escaped = esc(s);
+  return escaped
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\n/g, '<br>');
+}
+
+function openAISidebar() {
+  const sb = document.getElementById('ai-sidebar');
+  const ov = document.getElementById('ai-sidebar-overlay');
+  if (!sb || !ov) return;
+  sb.classList.add('open');
+  sb.setAttribute('aria-hidden', 'false');
+  ov.classList.add('show');
+  if (!_aiInsightsLoaded) loadAIInsights();
+  setTimeout(() => { const i = document.getElementById('ai-input'); if (i) i.focus(); }, 200);
+}
+
+function closeAISidebar() {
+  const sb = document.getElementById('ai-sidebar');
+  const ov = document.getElementById('ai-sidebar-overlay');
+  if (!sb || !ov) return;
+  sb.classList.remove('open');
+  sb.setAttribute('aria-hidden', 'true');
+  ov.classList.remove('show');
+}
+
+async function loadAIInsights() {
+  const list = document.getElementById('ai-insights-list');
+  if (!list) return;
+  list.innerHTML = '<div class="ai-typing"><span></span><span></span><span></span></div>';
+  if (!window.AxessAuth || typeof window.AxessAuth.fetchInsights !== 'function') {
+    list.innerHTML = '<p style="font-size:11px;color:var(--text-3)">AI not configured.</p>';
+    return;
+  }
+  const res = await window.AxessAuth.fetchInsights();
+  if (res.skipped) {
+    list.innerHTML = '<p style="font-size:11px;color:var(--text-3)">AI disabled (dev mode).</p>';
+    return;
+  }
+  if (res.error) {
+    list.innerHTML = '<p style="font-size:11px;color:#b91c1c">Error: ' + esc(res.error) + '</p>';
+    return;
+  }
+  renderAIHighlights(res.highlights || []);
+  _aiInsightsLoaded = true;
+  if (res.quota) updateAIQuota(res.quota);
+}
+
+function renderAIHighlights(highlights) {
+  const list = document.getElementById('ai-insights-list');
+  if (!list) return;
+  if (!highlights.length) {
+    list.innerHTML = '<p style="font-size:11px;color:var(--text-3)">No highlights right now. Operations are running smoothly.</p>';
+    return;
+  }
+  list.innerHTML = highlights.map(h => {
+    const sev = (h.severity || 'low').toLowerCase();
+    return '<div class="ai-highlight severity-' + esc(sev) + '">' +
+      '<span class="ai-highlight-icon">' + esc(h.icon || '•') + '</span>' +
+      '<div class="ai-highlight-body">' +
+        '<div class="ai-highlight-title">' + esc(h.title || '—') + '</div>' +
+        '<div class="ai-highlight-detail">' + esc(h.detail || '') + '</div>' +
+      '</div></div>';
+  }).join('');
+}
+
+function askAISuggestion(btn) {
+  const input = document.getElementById('ai-input');
+  if (!input || !btn) return;
+  input.value = btn.textContent.trim();
+  sendAIQuestion();
+}
+
+function onAIInputKey(ev) {
+  if (ev.key === 'Enter' && !ev.shiftKey) {
+    ev.preventDefault();
+    sendAIQuestion();
+  }
+}
+
+async function sendAIQuestion() {
+  if (_aiSending) return;
+  const input = document.getElementById('ai-input');
+  const btn = document.getElementById('ai-send-btn');
+  const chat = document.getElementById('ai-chat-area');
+  if (!input || !btn || !chat) return;
+  const q = input.value.trim();
+  if (!q) return;
+
+  _aiSending = true;
+  btn.disabled = true;
+  input.value = '';
+  _renderAIMessage('user', q);
+  const typingId = _renderAITyping();
+
+  const res = await window.AxessAuth.askAssistant(q);
+  _removeAITyping(typingId);
+
+  if (res.error) {
+    const msg = res.status === 429 ? 'AI quota reached for today. Try again tomorrow.' : ('Error: ' + res.error);
+    _renderAIMessage('error', msg);
+  } else {
+    _renderAIMessage('assistant', res.answer || '(empty response)');
+    _aiHistory.push({ role: 'user', content: q });
+    _aiHistory.push({ role: 'assistant', content: res.answer || '' });
+    if (res.quota) updateAIQuota(res.quota);
+  }
+
+  _aiSending = false;
+  btn.disabled = false;
+  input.focus();
+}
+
+function _renderAIMessage(role, text) {
+  const chat = document.getElementById('ai-chat-area');
+  if (!chat) return;
+  const avatar = role === 'user' ? 'YO' : (role === 'error' ? '!' : 'AI');
+  const div = document.createElement('div');
+  div.className = 'ai-message ' + role;
+  div.innerHTML =
+    '<div class="ai-message-avatar">' + avatar + '</div>' +
+    '<div class="ai-message-bubble">' + _aiSafeText(text) + '</div>';
+  chat.appendChild(div);
+  chat.scrollIntoView({ block: 'end', behavior: 'smooth' });
+  div.scrollIntoView({ block: 'end', behavior: 'smooth' });
+}
+
+function _renderAITyping() {
+  const chat = document.getElementById('ai-chat-area');
+  if (!chat) return null;
+  const id = 'ai-typing-' + Date.now();
+  const div = document.createElement('div');
+  div.id = id;
+  div.className = 'ai-message assistant';
+  div.innerHTML = '<div class="ai-message-avatar">AI</div><div class="ai-typing"><span></span><span></span><span></span></div>';
+  chat.appendChild(div);
+  div.scrollIntoView({ block: 'end', behavior: 'smooth' });
+  return id;
+}
+
+function _removeAITyping(id) {
+  if (!id) return;
+  const el = document.getElementById(id);
+  if (el) el.remove();
+}
+
+function updateAIQuota(quota) {
+  const el = document.getElementById('ai-quota');
+  if (!el || !quota) return;
+  el.textContent = quota.used + ' / ' + quota.max + ' AI queries today';
 }
 
 document.addEventListener('DOMContentLoaded', async function() {
