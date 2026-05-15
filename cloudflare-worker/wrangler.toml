@@ -1,0 +1,21 @@
+name = "axess-gy-auth"
+main = "src/index.js"
+compatibility_date = "2026-01-01"
+workers_dev = true
+
+# ── KV namespace ──
+# Created via `npx wrangler kv namespace create USERS` on 2026-05-15.
+[[kv_namespaces]]
+binding = "USERS"
+id = "9a2fa7bc981a473cbdefdba494098dc8"
+
+# ── Allowed CORS origin(s) ──
+# Comma-separated. axess.olmoraia.com is the future custom domain; the github.io
+# host is the fallback in case the CNAME isn't set up yet.
+[vars]
+ALLOWED_ORIGIN = "https://axess.olmoraia.com,https://josuachavesolmos.github.io"
+
+# ── Secrets ──
+# JWT_SECRET is set out-of-band:
+#   npx wrangler secret put JWT_SECRET
+# Use a random 48+ char value, e.g.: openssl rand -base64 48

@@ -1,0 +1,20 @@
+[
+  {
+    "username": "vquijano",
+    "name": "Viviana Quijano",
+    "email": "vquijano@axessgroup.com",
+    "role": "admin"
+  },
+  {
+    "username": "epena",
+    "name": "Erick Pena",
+    "email": "epena@axessgroup.com",
+    "role": "viewer"
+  },
+  {
+    "username": "kishore",
+    "name": "Kishore Subramani",
+    "email": "kishore@axessgroup.com",
+    "role": "viewer"
+  }
+]

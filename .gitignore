@@ -4,3 +4,13 @@ node_modules/
 *.pbix
 *.png
 test-results/
+
+# Cloudflare Worker
+.wrangler/
+cloudflare-worker/.dev.vars
+cloudflare-worker/users.json
+*.log
+
+# Claude scratch
+.claude/
+.mcp.json

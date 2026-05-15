@@ -1,0 +1,2511 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Axess GY — Operations Platform</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/apexcharts@4.3.0/dist/apexcharts.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+/* ═══════════════════════ DESIGN TOKENS ═══════════════════════ */
+:root {
+  --brand:#00636d; --brand-light:#009aa6; --brand-glow:#33b8c2; --brand-pale:#e0f5f6;
+  --warm:#e98300; --warm-pale:#fef0d6;
+  --success:#7ab800; --warning:#f59e0b; --danger:#ef4444; --info:#589199;
+  --bg:#f0f2f5; --bg-2:#e5e7eb; --card:#ffffff; --card-glass:rgba(255,255,255,0.72);
+  --text:#111827; --text-2:#4D5357; --text-3:#8a9196;
+  --border:rgba(0,0,0,0.06); --border-2:rgba(0,0,0,0.10);
+  --sidebar-bg:#1e2729; --sidebar-text:#94a3b8; --sidebar-active:#e2e8f0;
+  --r:14px; --r-sm:8px; --r-xs:6px;
+  --sh:0 1px 3px rgba(0,0,0,0.06); --sh-md:0 4px 12px rgba(0,0,0,0.08); --sh-lg:0 8px 32px rgba(0,0,0,0.12);
+  --glass-blur:16px; --glass-border:rgba(255,255,255,0.22);
+  --sidebar-w:260px; --sidebar-cw:72px; --topbar-h:60px;
+  --font:'Century Gothic','Trebuchet MS',Arial,sans-serif;
+  --font-mono:'JetBrains Mono','SF Mono','Fira Code',monospace;
+}
+[data-theme="dark"] {
+  --bg:#0b0d12; --bg-2:#1a1d23; --card:#141720; --card-glass:rgba(20,23,32,0.78);
+  --text:#e5e7eb; --text-2:#8a9196; --text-3:#6b7280;
+  --border:rgba(255,255,255,0.06); --border-2:rgba(255,255,255,0.10);
+  --glass-border:rgba(255,255,255,0.08);
+  --brand-pale:#003d43; --warm-pale:#2d1f00;
+  --sh:0 1px 3px rgba(0,0,0,0.3); --sh-md:0 4px 12px rgba(0,0,0,0.4); --sh-lg:0 8px 32px rgba(0,0,0,0.5);
+}
+
+/* ═══════════════════════ RESET & BASE ═══════════════════════ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:14px;scroll-behavior:smooth}
+body{font-family:var(--font);background:var(--bg);color:var(--text);line-height:1.5;overflow-x:hidden;transition:background .35s,color .35s}
+button,input,select,textarea{font-family:inherit;font-size:inherit;border:none;outline:none;background:none;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--brand-light);outline-offset:2px;border-radius:var(--r-xs)}
+::selection{background:var(--brand-light);color:#fff}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--text-3);border-radius:3px}
+
+/* ═══════════════════════ SIDEBAR ═══════════════════════ */
+.sidebar{position:fixed;left:0;top:0;bottom:0;width:var(--sidebar-w);background:var(--sidebar-bg);z-index:100;display:flex;flex-direction:column;transition:width .35s cubic-bezier(.4,0,.2,1);overflow:hidden}
+.sidebar.collapsed{width:var(--sidebar-cw)}
+.sb-brand{display:flex;align-items:center;gap:14px;padding:20px 22px;min-height:68px}
+.sb-logo{width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,var(--brand-light),var(--brand));display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:18px;flex-shrink:0}
+.sb-brand-text{font-size:17px;font-weight:700;color:#fff;white-space:nowrap;letter-spacing:2.5px;opacity:1;transition:opacity .25s}
+.sidebar.collapsed .sb-brand-text{opacity:0;pointer-events:none}
+.sb-nav{flex:1;padding:8px 12px;display:flex;flex-direction:column;gap:4px}
+.nav-item{display:flex;align-items:center;gap:14px;padding:12px 14px;border-radius:10px;color:var(--sidebar-text);font-weight:500;font-size:13px;transition:all .2s;white-space:nowrap;position:relative;min-height:44px}
+.nav-item:hover{background:rgba(255,255,255,0.06);color:#e2e8f0}
+.nav-item.active{background:rgba(42,157,143,0.15);color:var(--brand-glow)}
+.nav-item.active::before{content:'';position:absolute;left:0;top:8px;bottom:8px;width:3px;border-radius:0 3px 3px 0;background:var(--brand-light);box-shadow:0 0 8px var(--brand-glow)}
+.nav-icon{width:20px;height:20px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.nav-icon svg{width:20px;height:20px}
+.nav-badge{margin-left:auto;background:rgba(255,255,255,0.08);padding:2px 10px;border-radius:20px;font-size:11px;font-family:var(--font-mono);font-weight:500;min-width:32px;text-align:center}
+.nav-label{opacity:1;transition:opacity .2s}
+.sidebar.collapsed .nav-label,.sidebar.collapsed .nav-badge{opacity:0;pointer-events:none}
+.sb-footer{padding:12px;border-top:1px solid rgba(255,255,255,0.06);display:flex;flex-direction:column;gap:6px}
+.sb-toggle,.sb-theme{display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:10px;color:var(--sidebar-text);font-size:12px;font-weight:500;transition:all .2s;white-space:nowrap;min-height:44px}
+.sb-toggle:hover,.sb-theme:hover{background:rgba(255,255,255,0.06);color:#e2e8f0}
+.sb-toggle svg,.sb-theme svg{width:18px;height:18px;flex-shrink:0}
+.sidebar.collapsed .sb-toggle span,.sidebar.collapsed .sb-theme span{opacity:0}
+
+/* ═══════════════════════ TOPBAR ═══════════════════════ */
+.topbar{position:sticky;top:0;height:var(--topbar-h);background:var(--card-glass);backdrop-filter:blur(var(--glass-blur));border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 28px;z-index:90}
+.top-left{display:flex;align-items:center;gap:16px}
+.top-title{font-size:17px;font-weight:700;color:var(--text)}
+.top-subtitle{font-size:12px;color:var(--text-3);font-weight:500}
+.top-right{display:flex;align-items:center;gap:10px}
+
+/* ═══════════════════════ MAIN CONTENT ═══════════════════════ */
+.main{margin-left:var(--sidebar-w);min-height:100vh;transition:margin-left .35s cubic-bezier(.4,0,.2,1)}
+.sidebar.collapsed~.main{margin-left:var(--sidebar-cw)}
+.content{padding:24px 28px 40px}
+
+/* ═══════════════════════ BUTTONS ═══════════════════════ */
+.btn-primary{display:inline-flex;align-items:center;gap:8px;padding:9px 20px;border-radius:var(--r-sm);background:var(--brand-light);color:#fff;font-size:13px;font-weight:600;transition:all .2s;min-height:38px}
+.btn-primary:hover{background:var(--brand);transform:translateY(-1px);box-shadow:var(--sh-md)}
+.btn-primary svg{width:16px;height:16px}
+.btn-secondary{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:24px;border:1.5px solid var(--border-2);font-size:12px;font-weight:500;color:var(--text-2);transition:all .2s;min-height:36px}
+.btn-secondary:hover{border-color:var(--brand-light);color:var(--brand-light)}
+.btn-danger{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:var(--r-sm);background:var(--danger);color:#fff;font-size:12px;font-weight:600;transition:all .2s;min-height:36px}
+.btn-danger:hover{background:#dc2626}
+
+/* ═══════════════════════ FILTERS BAR ═══════════════════════ */
+.filters-bar{display:flex;flex-wrap:wrap;gap:10px;align-items:end;padding:16px 20px;background:var(--card-glass);backdrop-filter:blur(var(--glass-blur));border:1px solid var(--glass-border);border-radius:var(--r);margin-bottom:20px;box-shadow:var(--sh)}
+.filter-group{display:flex;flex-direction:column;gap:4px;min-width:130px}
+.filter-group label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--text-3)}
+.filter-input{padding:8px 12px;border-radius:var(--r-sm);border:1.5px solid var(--border-2);background:var(--bg);font-size:12.5px;color:var(--text);transition:all .2s;min-height:38px;min-width:120px}
+.filter-input:focus{border-color:var(--brand-light);box-shadow:0 0 0 3px rgba(42,157,143,0.12)}
+select.filter-input{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:28px}
+.filter-reset{align-self:end;padding:8px 18px;border-radius:var(--r-sm);background:var(--danger);color:#fff;font-size:12px;font-weight:600;transition:all .2s;min-height:38px;margin-left:auto}
+.filter-reset:hover{background:#dc2626}
+.filter-count{font-size:11px;color:var(--text-3);align-self:center;font-family:var(--font-mono);padding:8px 0}
+
+/* ═══════════════════════ KPI CARDS ═══════════════════════ */
+.kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:16px;margin-bottom:24px}
+.kpi-card{background:var(--card-glass);backdrop-filter:blur(var(--glass-blur));border:1px solid var(--glass-border);border-radius:var(--r);padding:20px;position:relative;overflow:hidden;transition:all .25s;box-shadow:var(--sh)}
+.kpi-card:hover{transform:translateY(-2px);box-shadow:var(--sh-md)}
+.kpi-accent{position:absolute;top:0;left:0;right:0;height:3px;border-radius:var(--r) var(--r) 0 0}
+.kpi-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.7px;color:var(--text-3);margin-bottom:8px}
+.kpi-value{font-family:var(--font-mono);font-size:26px;font-weight:700;color:var(--text);line-height:1.2}
+.kpi-sub{font-size:11px;color:var(--text-2);margin-top:6px}
+
+/* ═══════════════════════ DATA TABLE ═══════════════════════ */
+.data-table-wrap{background:var(--card-glass);backdrop-filter:blur(var(--glass-blur));border:1px solid var(--glass-border);border-radius:var(--r);overflow:hidden;box-shadow:var(--sh);margin-bottom:24px}
+.data-table-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border)}
+.data-table-title{font-size:14px;font-weight:700;color:var(--text)}
+.data-table{width:100%;border-collapse:collapse}
+.data-table thead{background:var(--bg)}
+.data-table th{padding:10px 14px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--text-3);text-align:left;border-bottom:2px solid var(--border);white-space:nowrap}
+.data-table td{padding:10px 14px;font-size:12px;color:var(--text);border-bottom:1px solid var(--border)}
+.data-table tr:hover td{background:var(--brand-pale)}
+.data-table .mono{font-family:var(--font-mono);font-size:11px}
+.status-badge{display:inline-flex;padding:3px 10px;border-radius:999px;font-size:10px;font-weight:700}
+.action-btns{display:flex;gap:6px}
+.action-btn{width:30px;height:30px;border-radius:var(--r-xs);display:flex;align-items:center;justify-content:center;transition:all .2s}
+.action-btn:hover{background:var(--bg-2)}
+.action-btn svg{width:14px;height:14px}
+.action-btn.edit{color:var(--brand-light)}
+.action-btn.delete{color:var(--danger)}
+
+/* ═══════════════════════ CHART GRID ═══════════════════════ */
+.chart-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:18px}
+.chart-card{background:var(--card-glass);backdrop-filter:blur(var(--glass-blur));border:1px solid var(--glass-border);border-radius:var(--r);overflow:hidden;box-shadow:var(--sh);transition:all .25s}
+.chart-card:hover{box-shadow:var(--sh-md)}
+.chart-card.wide{grid-column:span 2}
+.chart-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px 8px}
+.chart-title{font-size:13px;font-weight:600;color:var(--text)}
+.chart-tag{font-size:10px;color:var(--text-3);background:var(--bg);padding:2px 8px;border-radius:12px}
+.chart-body{padding:4px 12px 12px;height:300px;position:relative}
+
+/* ═══════════════════════ MODAL ═══════════════════════ */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);backdrop-filter:blur(4px);z-index:200;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal{background:var(--card);border-radius:var(--r);box-shadow:var(--sh-lg);width:95%;max-width:640px;max-height:90vh;overflow-y:auto;animation:modalIn .3s ease}
+@keyframes modalIn{from{opacity:0;transform:translateY(20px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
+.modal-header{display:flex;align-items:center;justify-content:space-between;padding:20px 24px;border-bottom:1px solid var(--border)}
+.modal-title{font-size:17px;font-weight:700;color:var(--text)}
+.modal-close{width:36px;height:36px;border-radius:var(--r-sm);display:flex;align-items:center;justify-content:center;color:var(--text-3);transition:all .2s}
+.modal-close:hover{background:var(--bg-2);color:var(--text)}
+.modal-close svg{width:20px;height:20px}
+.modal-body{padding:24px}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.form-group{display:flex;flex-direction:column;gap:6px}
+.form-group.full{grid-column:span 2}
+.form-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.7px;color:var(--text-3)}
+.form-control{padding:10px 14px;border-radius:var(--r-sm);border:1.5px solid var(--border-2);background:var(--bg);font-size:13px;color:var(--text);transition:all .2s;min-height:42px}
+.form-control:focus{border-color:var(--brand-light);box-shadow:0 0 0 3px rgba(42,157,143,0.12)}
+select.form-control{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:28px}
+textarea.form-control{min-height:80px;resize:vertical}
+.modal-footer{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:16px 24px;border-top:1px solid var(--border)}
+
+/* ═══════════════════════ TOAST ═══════════════════════ */
+.toast-container{position:fixed;top:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px}
+.toast{padding:14px 20px;border-radius:var(--r-sm);background:var(--card);border:1px solid var(--border);box-shadow:var(--sh-lg);font-size:13px;font-weight:500;display:flex;align-items:center;gap:10px;animation:toastIn .35s ease;max-width:380px}
+.toast.success{border-left:4px solid var(--success)}
+.toast.error{border-left:4px solid var(--danger)}
+.toast.info{border-left:4px solid var(--info)}
+@keyframes toastIn{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:translateX(0)}}
+
+/* ═══════════════════════ TAB PANELS ═══════════════════════ */
+.tab-panel{display:none}
+.tab-panel.active{display:block;animation:fadeUp .4s ease}
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+
+/* ═══════════════════════ MOBILE NAV ═══════════════════════ */
+.mobile-nav{display:none;position:sticky;top:0;z-index:95;background:var(--card-glass);backdrop-filter:blur(var(--glass-blur));border-bottom:1px solid var(--border);padding:0 16px;overflow-x:auto}
+.mobile-nav button{padding:14px 18px;font-size:12px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.8px;white-space:nowrap;border-bottom:2px solid transparent;transition:all .2s;min-height:44px}
+.mobile-nav button.active{color:var(--brand-light);border-bottom-color:var(--brand-light)}
+
+/* ═══════════════════════ LOADING ═══════════════════════ */
+.loading-spinner{display:flex;align-items:center;justify-content:center;padding:60px;color:var(--text-3);font-size:14px;gap:10px}
+.spinner{width:20px;height:20px;border:2.5px solid var(--border-2);border-top-color:var(--brand-light);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ═══════════════════════ EMPTY STATE ═══════════════════════ */
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 20px;text-align:center}
+.empty-icon{width:56px;height:56px;border-radius:16px;background:var(--brand-pale);color:var(--brand-light);display:flex;align-items:center;justify-content:center;margin-bottom:16px}
+.empty-icon svg{width:28px;height:28px}
+.empty-title{font-size:17px;font-weight:700;color:var(--text);margin-bottom:6px}
+.empty-desc{font-size:13px;color:var(--text-2);max-width:400px}
+
+/* ═══════════════════════ VIEW TOGGLE ═══════════════════════ */
+.view-toggle{display:flex;gap:6px;margin-bottom:18px}
+.view-btn{display:flex;align-items:center;gap:8px;padding:9px 18px;border-radius:var(--r-sm);border:1.5px solid var(--border-2);font-size:12px;font-weight:600;color:var(--text-2);transition:all .2s;min-height:38px}
+.view-btn.active{background:var(--brand-light);color:#fff;border-color:var(--brand-light)}
+.view-btn:hover:not(.active){border-color:var(--brand-light);color:var(--brand-light)}
+
+/* ═══════════════════════ GANTT ═══════════════════════ */
+.gantt-wrap{background:var(--card-glass);backdrop-filter:blur(var(--glass-blur));border:1px solid var(--glass-border);border-radius:var(--r);overflow:hidden;margin-bottom:18px;box-shadow:var(--sh)}
+.gantt-toolbar{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:10px}
+.gantt-scale-btn{padding:6px 14px;border-radius:var(--r-sm);font-size:11px;font-weight:600;color:var(--text-2);border:1.5px solid var(--border-2);transition:all .2s;min-height:32px}
+.gantt-scale-btn.active{background:var(--brand-light);color:#fff;border-color:var(--brand-light)}
+.gantt-scale-btn:hover:not(.active){border-color:var(--brand-light);color:var(--brand-light)}
+
+/* ═══════════════════════ UPLOAD / IMPORT ═══════════════════════ */
+.upload-pill{display:inline-flex;align-items:center;gap:8px;padding:7px 16px;border-radius:24px;border:1.5px solid var(--border-2);font-size:12px;font-weight:500;color:var(--text-2);transition:all .2s;position:relative;overflow:hidden;min-height:36px;cursor:pointer}
+.upload-pill:hover{border-color:var(--brand-light);color:var(--brand-light);background:var(--brand-pale)}
+.upload-pill input[type="file"]{position:absolute;inset:0;opacity:0;cursor:pointer}
+.upload-pill svg{width:14px;height:14px;flex-shrink:0}
+.import-progress{padding:20px 24px}
+.import-progress .progress-bar{width:100%;height:8px;border-radius:4px;background:var(--bg-2);overflow:hidden;margin:12px 0}
+.import-progress .progress-fill{height:100%;border-radius:4px;background:var(--brand-light);transition:width .3s}
+.import-progress .progress-text{font-size:12px;color:var(--text-2);font-family:var(--font-mono)}
+.file-upload-area{border:2px dashed var(--border-2);border-radius:var(--r-sm);padding:16px;text-align:center;transition:all .2s;cursor:pointer;position:relative}
+.file-upload-area:hover{border-color:var(--brand-light);background:var(--brand-pale)}
+.file-upload-area input[type="file"]{position:absolute;inset:0;opacity:0;cursor:pointer}
+.file-upload-area .file-name{font-size:12px;color:var(--brand-light);font-weight:600;margin-top:4px}
+.file-upload-area svg{width:20px;height:20px;color:var(--text-3);margin-bottom:4px}
+.cert-link{display:inline-flex;align-items:center;gap:4px;color:var(--brand-light);font-size:11px;font-weight:600;text-decoration:none}
+.cert-link:hover{text-decoration:underline}
+.cert-link svg{width:12px;height:12px}
+
+/* ═══════════════════════ GANTT RESIZE ═══════════════════════ */
+.gantt-bar-resizable{position:relative}
+.gantt-bar-resizable .gantt-handle{position:absolute;top:0;bottom:0;width:8px;cursor:col-resize;z-index:6;opacity:0;transition:opacity .15s}
+.gantt-bar-resizable:hover .gantt-handle{opacity:1}
+.gantt-handle-left{left:-2px;border-radius:5px 0 0 5px}
+.gantt-handle-right{right:-2px;border-radius:0 5px 5px 0}
+.gantt-handle::after{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:2px;height:12px;border-radius:1px;background:rgba(255,255,255,.7);box-shadow:0 0 2px rgba(0,0,0,.3)}
+.gantt-bar-resizable:hover{box-shadow:0 0 0 2px var(--brand-light);z-index:8!important}
+.gantt-bar-resizable.dragging{opacity:.85;z-index:10!important;box-shadow:0 0 0 2px var(--warning)!important}
+.gantt-bar-ghost{position:absolute;height:22px;top:5px;border-radius:5px;border:2px dashed var(--warning);background:rgba(245,158,11,.12);pointer-events:none;z-index:5;transition:left .05s,width .05s}
+.gantt-confirm-pop{position:absolute;z-index:20;background:var(--card);border:1px solid var(--border-2);border-radius:var(--r-sm);box-shadow:var(--sh-lg);padding:10px 14px;min-width:220px;animation:modalIn .2s ease}
+.gantt-confirm-pop .pop-dates{display:flex;align-items:center;gap:6px;font-size:11px;font-family:var(--font-mono);color:var(--text);margin-bottom:8px}
+.gantt-confirm-pop .pop-dates .pop-arrow{color:var(--text-3)}
+.gantt-confirm-pop .pop-dates .pop-changed{color:var(--warning);font-weight:700}
+.gantt-confirm-pop .pop-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:var(--text-3);margin-bottom:6px}
+.gantt-confirm-pop .pop-actions{display:flex;gap:6px;justify-content:flex-end}
+.gantt-confirm-pop .pop-btn{padding:5px 14px;border-radius:var(--r-xs);font-size:11px;font-weight:600;transition:all .15s;min-height:28px}
+.gantt-confirm-pop .pop-btn-cancel{border:1px solid var(--border-2);color:var(--text-2)}
+.gantt-confirm-pop .pop-btn-cancel:hover{border-color:var(--text-3)}
+.gantt-confirm-pop .pop-btn-save{background:var(--brand-light);color:#fff}
+.gantt-confirm-pop .pop-btn-save:hover{background:var(--brand)}
+
+/* ═══════════════════════ ANIMATIONS ═══════════════════════ */
+.kpi-card,.chart-card{opacity:0;transform:translateY(16px);animation:fadeSlideUp .5s ease forwards}
+.kpi-card:nth-child(1){animation-delay:.05s}.kpi-card:nth-child(2){animation-delay:.1s}.kpi-card:nth-child(3){animation-delay:.15s}.kpi-card:nth-child(4){animation-delay:.2s}.kpi-card:nth-child(5){animation-delay:.25s}
+.chart-card:nth-child(1){animation-delay:.1s}.chart-card:nth-child(2){animation-delay:.15s}.chart-card:nth-child(3){animation-delay:.2s}.chart-card:nth-child(4){animation-delay:.25s}
+@keyframes fadeSlideUp{to{opacity:1;transform:translateY(0)}}
+
+/* ═══════════════════════ RESPONSIVE ═══════════════════════ */
+@media(max-width:1280px){.kpi-row{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:1024px){
+  .sidebar{display:none}.main{margin-left:0!important}
+  .topbar{left:0!important;padding:0 16px}
+  .mobile-nav{display:flex}
+  .content{padding:16px}
+  .chart-grid{grid-template-columns:1fr}.chart-card.wide{grid-column:span 1}
+  .kpi-row{grid-template-columns:repeat(2,1fr)}
+  .form-grid{grid-template-columns:1fr}
+  .form-group.full{grid-column:span 1}
+}
+@media(max-width:768px){
+  .kpi-row{grid-template-columns:repeat(2,1fr);gap:10px}
+  .kpi-value{font-size:20px}
+  .filters-bar{flex-direction:column;gap:8px}
+  .filter-group{min-width:100%}
+}
+
+/* ═══════════════════════ LOGIN SCREEN ═══════════════════════ */
+.login-screen{
+  position:fixed;inset:0;
+  background:var(--bg);
+  display:flex;align-items:center;justify-content:center;
+  z-index:1000;
+  padding:20px;
+  transition:opacity .4s ease, visibility .4s ease;
+}
+.login-screen.hidden{
+  opacity:0;visibility:hidden;pointer-events:none;
+}
+.login-bg{
+  position:absolute;inset:0;overflow:hidden;pointer-events:none;
+}
+.login-bg::before{
+  content:'';position:absolute;
+  width:600px;height:600px;
+  border-radius:50%;
+  background:radial-gradient(circle, rgba(0,154,166,0.12) 0%, transparent 70%);
+  top:-100px;left:-100px;
+}
+.login-bg::after{
+  content:'';position:absolute;
+  width:500px;height:500px;
+  border-radius:50%;
+  background:radial-gradient(circle, rgba(233,131,0,0.08) 0%, transparent 70%);
+  bottom:-80px;right:-80px;
+}
+.login-card{
+  position:relative;z-index:1;
+  background:var(--card-glass);
+  backdrop-filter:blur(var(--glass-blur));
+  border:1px solid var(--glass-border);
+  border-radius:var(--r);
+  box-shadow:var(--sh-lg);
+  width:100%;max-width:420px;
+  padding:40px 36px 36px;
+  animation:loginCardIn .5s cubic-bezier(.34,1.56,.64,1) both;
+}
+@keyframes loginCardIn{
+  from{opacity:0;transform:translateY(32px) scale(.96)}
+  to{opacity:1;transform:translateY(0) scale(1)}
+}
+.login-brand{
+  display:flex;align-items:center;gap:14px;margin-bottom:32px;
+}
+.login-logo{
+  width:46px;height:46px;border-radius:12px;
+  background:linear-gradient(135deg,var(--brand-light),var(--brand));
+  display:flex;align-items:center;justify-content:center;
+  color:#fff;font-weight:700;font-size:22px;
+  box-shadow:0 4px 14px rgba(0,99,109,0.35);
+  flex-shrink:0;
+}
+.login-brand-text{
+  display:flex;flex-direction:column;gap:2px;
+}
+.login-brand-title{
+  font-size:16px;font-weight:700;color:var(--text);letter-spacing:2px;
+}
+.login-brand-sub{
+  font-size:11px;color:var(--text-3);font-weight:500;letter-spacing:.5px;
+}
+.login-heading{
+  font-size:22px;font-weight:700;color:var(--text);margin-bottom:6px;
+}
+.login-subheading{
+  font-size:13px;color:var(--text-2);margin-bottom:28px;
+}
+.login-form{
+  display:flex;flex-direction:column;gap:16px;
+}
+.login-form .form-group{
+  display:flex;flex-direction:column;gap:6px;
+}
+.login-form .form-label{
+  font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.7px;color:var(--text-3);
+}
+.login-form .form-control{
+  width:100%;
+}
+.login-submit{
+  width:100%;justify-content:center;padding:12px 20px;font-size:14px;margin-top:4px;
+}
+.login-error{
+  display:none;
+  padding:11px 14px;border-radius:var(--r-sm);
+  background:rgba(239,68,68,0.1);
+  border:1px solid rgba(239,68,68,0.25);
+  color:var(--danger);
+  font-size:12px;font-weight:500;
+  align-items:center;gap:8px;
+}
+.login-error.visible{display:flex;}
+.login-error svg{width:15px;height:15px;flex-shrink:0;}
+.login-theme{
+  position:absolute;top:16px;right:16px;
+  width:36px;height:36px;border-radius:var(--r-sm);
+  display:flex;align-items:center;justify-content:center;
+  color:var(--text-3);transition:all .2s;
+}
+.login-theme:hover{background:var(--bg-2);color:var(--text);}
+.login-theme svg{width:16px;height:16px;}
+.login-divider{
+  height:1px;background:var(--border);margin:8px 0;
+}
+
+/* ═══════════════════════ USER PILL (TOPBAR) ═══════════════════════ */
+.user-pill{
+  display:flex;align-items:center;gap:8px;
+  padding:6px 12px 6px 8px;
+  border-radius:24px;
+  background:var(--bg);
+  border:1px solid var(--border-2);
+  font-size:12px;font-weight:500;color:var(--text-2);
+  max-width:200px;overflow:hidden;
+}
+.user-avatar{
+  width:26px;height:26px;border-radius:50%;
+  background:linear-gradient(135deg,var(--brand-light),var(--brand));
+  display:flex;align-items:center;justify-content:center;
+  color:#fff;font-size:11px;font-weight:700;
+  flex-shrink:0;
+}
+.user-email{
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+
+/* ═══════════════════════ DASHBOARD TRANSITION ═══════════════════════ */
+.dashboard-wrap{
+  transition:opacity .4s ease, visibility .4s ease;
+}
+.dashboard-wrap.hidden{
+  opacity:0;visibility:hidden;pointer-events:none;
+}
+</style>
+</head>
+<body>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toasts" aria-live="polite"></div>
+
+<!-- ═══════════════════════ LOGIN SCREEN ═══════════════════════ -->
+<div class="login-screen" id="login-screen">
+  <div class="login-bg"></div>
+
+  <!-- Theme toggle on login -->
+  <button class="login-theme" onclick="toggleTheme()" title="Toggle theme">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+  </button>
+
+  <div class="login-card">
+    <!-- Brand -->
+    <div class="login-brand">
+      <div class="login-logo">A</div>
+      <div class="login-brand-text">
+        <div class="login-brand-title">AXESS GY</div>
+        <div class="login-brand-sub">Operations Platform</div>
+      </div>
+    </div>
+
+    <div class="login-heading">Sign in</div>
+    <div class="login-subheading">Enter your credentials to access the dashboard.</div>
+
+    <!-- Error message -->
+    <div class="login-error" id="login-error">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <span id="login-error-msg">Invalid email or password.</span>
+    </div>
+
+    <form class="login-form" id="login-form" onsubmit="return handleLogin(event)">
+      <div class="form-group">
+        <label class="form-label" for="login-email">Email address</label>
+        <input
+          type="email"
+          id="login-email"
+          class="form-control"
+          placeholder="you@axessgy.com"
+          autocomplete="email"
+          required
+        >
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="login-password">Password</label>
+        <input
+          type="password"
+          id="login-password"
+          class="form-control"
+          placeholder="••••••••"
+          autocomplete="current-password"
+          required
+        >
+      </div>
+      <button type="submit" class="btn-primary login-submit" id="login-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+        Sign In
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- ═══════════════════════ DASHBOARD WRAPPER ═══════════════════════ -->
+<div class="dashboard-wrap hidden" id="dashboard-wrap">
+
+<!-- ═══════════════════════ SIDEBAR ═══════════════════════ -->
+<aside class="sidebar" id="sidebar">
+  <div class="sb-brand">
+    <div class="sb-logo">A</div>
+    <span class="sb-brand-text">AXESS GY - Ops</span>
+  </div>
+  <nav class="sb-nav">
+    <button class="nav-item active" data-tab="personnel" onclick="switchTab('personnel')">
+      <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+      <span class="nav-label">Personnel</span>
+      <span class="nav-badge" id="badge-personnel">--</span>
+    </button>
+    <button class="nav-item" data-tab="equipment" onclick="switchTab('equipment')">
+      <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></span>
+      <span class="nav-label">Equipment</span>
+      <span class="nav-badge" id="badge-equipment">--</span>
+    </button>
+    <button class="nav-item" data-tab="quotes" onclick="switchTab('quotes')">
+      <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span>
+      <span class="nav-label">Quote Log</span>
+      <span class="nav-badge" id="badge-quotes">--</span>
+    </button>
+    <button class="nav-item" data-tab="projects" onclick="switchTab('projects')">
+      <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></span>
+      <span class="nav-label">Projects</span>
+      <span class="nav-badge" id="badge-projects">--</span>
+    </button>
+  </nav>
+  <div class="sb-footer">
+    <button class="sb-theme" onclick="handleLogout()" id="sb-logout" style="color:#ef4444" title="Sign out">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      <span>Sign Out</span>
+    </button>
+    <button class="sb-theme" onclick="toggleTheme()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+      <span>Theme</span>
+    </button>
+    <button class="sb-toggle" onclick="toggleSidebar()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+      <span>Collapse</span>
+    </button>
+  </div>
+</aside>
+
+<!-- ═══════════════════════ MAIN ═══════════════════════ -->
+<div class="main" id="main-content">
+  <div class="mobile-nav">
+    <button class="active" data-tab="personnel" onclick="switchTab('personnel')">Personnel</button>
+    <button data-tab="equipment" onclick="switchTab('equipment')">Equipment</button>
+    <button data-tab="quotes" onclick="switchTab('quotes')">Quotes</button>
+    <button data-tab="projects" onclick="switchTab('projects')">Projects</button>
+  </div>
+
+  <div class="topbar">
+    <div class="top-left">
+      <div>
+        <div class="top-title" id="top-title">Personnel Planner</div>
+        <div class="top-subtitle">Axess Guyana Operations</div>
+      </div>
+    </div>
+    <div class="top-right">
+      <div id="top-actions" style="display:flex;align-items:center;gap:10px"></div>
+      <div class="user-pill" id="user-pill" style="display:none">
+        <div class="user-avatar" id="user-avatar">?</div>
+        <span class="user-email" id="user-email-display"></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- ═══════ PERSONNEL TAB ═══════ -->
+    <div class="tab-panel active" id="panel-personnel">
+      <div class="filters-bar" id="filters-personnel">
+        <div class="filter-group"><label>Status</label><select class="filter-input" id="p-status" onchange="applyFilters('personnel')"><option value="">All</option></select></div>
+        <div class="filter-group"><label>Client</label><select class="filter-input" id="p-client" onchange="applyFilters('personnel')"><option value="">All</option></select></div>
+        <div class="filter-group"><label>Installation</label><select class="filter-input" id="p-installation" onchange="applyFilters('personnel')"><option value="">All</option></select></div>
+        <div class="filter-group"><label>Classification</label><select class="filter-input" id="p-classification" onchange="applyFilters('personnel')"><option value="">All</option></select></div>
+        <span class="filter-count" id="p-count"></span>
+        <button class="filter-reset" onclick="resetFilters('personnel')">Clear All</button>
+      </div>
+      <div class="kpi-row" id="kpi-personnel"></div>
+      <div class="view-toggle">
+        <button class="view-btn active" id="pvbtn-gantt" onclick="setPersonnelView('gantt')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><rect x="3" y="4" width="18" height="4" rx="1"/><rect x="3" y="10" width="12" height="4" rx="1"/><rect x="3" y="16" width="15" height="4" rx="1"/></svg>Gantt Calendar</button>
+        <button class="view-btn" id="pvbtn-table" onclick="setPersonnelView('table')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="3" x2="9" y2="21"/></svg>Table</button>
+        <button class="view-btn" id="pvbtn-charts" onclick="setPersonnelView('charts')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Charts</button>
+      </div>
+      <div id="personnel-gantt-view"></div>
+      <div id="table-personnel" style="display:none"><div class="loading-spinner"><div class="spinner"></div>Loading personnel data...</div></div>
+      <div class="chart-grid" id="charts-personnel" style="display:none;margin-top:24px"></div>
+    </div>
+
+    <!-- ═══════ EQUIPMENT TAB ═══════ -->
+    <div class="tab-panel" id="panel-equipment">
+      <div class="filters-bar" id="filters-equipment">
+        <div class="filter-group"><label>Status</label><select class="filter-input" id="e-status" onchange="applyFilters('equipment')"><option value="">All</option></select></div>
+        <div class="filter-group"><label>Category</label><select class="filter-input" id="e-category" onchange="applyFilters('equipment')"><option value="">All</option></select></div>
+        <div class="filter-group"><label>Calibration</label><select class="filter-input" id="e-calibration" onchange="applyFilters('equipment')"><option value="">All</option><option value="Valid">Valid</option><option value="Due Soon">Due Soon</option><option value="Expired">Expired</option></select></div>
+        <span class="filter-count" id="e-count"></span>
+        <button class="filter-reset" onclick="resetFilters('equipment')">Clear All</button>
+      </div>
+      <div class="kpi-row" id="kpi-equipment"></div>
+      <div class="view-toggle">
+        <button class="view-btn active" id="evbtn-gantt" onclick="setEquipmentView('gantt')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><rect x="3" y="4" width="18" height="4" rx="1"/><rect x="3" y="10" width="12" height="4" rx="1"/><rect x="3" y="16" width="15" height="4" rx="1"/></svg>Gantt Calendar</button>
+        <button class="view-btn" id="evbtn-table" onclick="setEquipmentView('table')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="3" x2="9" y2="21"/></svg>Inventory</button>
+        <button class="view-btn" id="evbtn-charts" onclick="setEquipmentView('charts')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Charts</button>
+      </div>
+      <div id="equipment-gantt-view"></div>
+      <div id="table-equipment" style="display:none"><div class="loading-spinner"><div class="spinner"></div>Loading equipment data...</div></div>
+      <div class="chart-grid" id="charts-equipment" style="display:none;margin-top:24px"></div>
+    </div>
+
+    <!-- ═══════ QUOTES TAB ═══════ -->
+    <div class="tab-panel" id="panel-quotes">
+      <div class="kpi-row" id="kpi-quotes"></div>
+      <div id="table-quotes"><div class="loading-spinner"><div class="spinner"></div>Loading quotes...</div></div>
+      <div class="chart-grid" id="charts-quotes" style="margin-top:24px"></div>
+    </div>
+
+    <!-- ═══════ PROJECTS TAB ═══════ -->
+    <div class="tab-panel" id="panel-projects">
+      <div class="kpi-row" id="kpi-projects"></div>
+      <div id="table-projects"><div class="loading-spinner"><div class="spinner"></div>Loading projects...</div></div>
+      <div class="chart-grid" id="charts-projects" style="margin-top:24px"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════ PERSONNEL MODAL ═══════════════════════ -->
+<div class="modal-overlay" id="modal-personnel">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 class="modal-title" id="modal-personnel-title">New Personnel Assignment</h2>
+      <button class="modal-close" onclick="closeModal('personnel')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <form id="form-personnel" class="form-grid" onsubmit="return savePersonnel(event)">
+        <input type="hidden" id="pf-id">
+        <div class="form-group">
+          <label class="form-label">Technician Name *</label>
+          <input class="form-control" id="pf-name" required placeholder="Full name">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Competency</label>
+          <input class="form-control" id="pf-competency" placeholder="e.g. ROV Pilot, Inspector">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Start Date *</label>
+          <input type="date" class="form-control" id="pf-start" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">End Date</label>
+          <input type="date" class="form-control" id="pf-end">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Duration (days)</label>
+          <input type="number" class="form-control" id="pf-duration" min="1" placeholder="Auto-calculated if dates set">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Status *</label>
+          <select class="form-control" id="pf-status" required></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Client</label>
+          <select class="form-control" id="pf-client"><option value="">Select...</option></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Installation</label>
+          <select class="form-control" id="pf-installation"><option value="">Select...</option></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Work Order</label>
+          <input class="form-control" id="pf-workorder" placeholder="WO number">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Classification</label>
+          <select class="form-control" id="pf-classification"><option value="">Select...</option></select>
+        </div>
+        <div class="form-group full">
+          <label class="form-label">Scope</label>
+          <textarea class="form-control" id="pf-scope" placeholder="Description of work scope"></textarea>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal('personnel')">Cancel</button>
+      <button class="btn-primary" onclick="document.getElementById('form-personnel').requestSubmit()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        Save
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ EQUIPMENT MODAL ═══════════════════════ -->
+<div class="modal-overlay" id="modal-equipment">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 class="modal-title" id="modal-equipment-title">New Equipment</h2>
+      <button class="modal-close" onclick="closeModal('equipment')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <form id="form-equipment" class="form-grid" onsubmit="return saveEquipment(event)">
+        <input type="hidden" id="ef-id">
+        <div class="form-group">
+          <label class="form-label">Description *</label>
+          <input class="form-control" id="ef-description" required placeholder="Equipment name/description">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Equipment ID Code</label>
+          <input class="form-control" id="ef-code" placeholder="e.g. ROV-001">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Category</label>
+          <select class="form-control" id="ef-category"><option value="">Select...</option></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Calibration Status</label>
+          <select class="form-control" id="ef-calibstatus">
+            <option value="">Select...</option>
+            <option value="Valid">Valid</option>
+            <option value="Due Soon">Due Soon</option>
+            <option value="Expired">Expired</option>
+            <option value="N/A">N/A</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Calibration Due Date</label>
+          <input type="date" class="form-control" id="ef-calibdate">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Active</label>
+          <select class="form-control" id="ef-active">
+            <option value="true">Yes</option>
+            <option value="false">No</option>
+          </select>
+        </div>
+        <div class="form-group full">
+          <label class="form-label">Calibration Certificate (PDF)</label>
+          <div class="file-upload-area" id="ef-cert-area">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            <div style="font-size:12px;color:var(--text-3)">Click or drag to upload PDF</div>
+            <div class="file-name" id="ef-cert-name"></div>
+            <input type="file" accept=".pdf" id="ef-cert-file" onchange="onCertFileSelected(this)">
+          </div>
+          <input type="hidden" id="ef-cert-url">
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal('equipment')">Cancel</button>
+      <button class="btn-primary" onclick="document.getElementById('form-equipment').requestSubmit()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        Save
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ DELETE CONFIRM MODAL ═══════════════════════ -->
+<div class="modal-overlay" id="modal-delete">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <h2 class="modal-title">Confirm Delete</h2>
+      <button class="modal-close" onclick="closeModal('delete')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:14px;color:var(--text)">Are you sure you want to delete this record? This action cannot be undone.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal('delete')">Cancel</button>
+      <button class="btn-danger" id="btn-confirm-delete" onclick="confirmDelete()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   AXESS GY OPS — Operations Platform with Supabase
+   ═══════════════════════════════════════════════════════════════ */
+
+// ─── Supabase Config ───
+const SUPABASE_URL = 'https://mfuamflrxvkjjnleqcws.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1mdWFtZmxyeHZrampubGVxY3dzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM5NTI2MjAsImV4cCI6MjA4OTUyODYyMH0.K2T2sPB8gaY2wNwCfUJJCNLmfc_3axth6zUqvOb2Vzg';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ─── State ───
+const COLORS = ['#2a9d8f','#e76f51','#3b82f6','#f59e0b','#8b5cf6','#10b981','#ec4899','#264653','#e9c46a','#06b6d4','#f43f5e','#84cc16'];
+const charts = {};
+let activeTab = 'personnel';
+let deleteTarget = null;
+const lookups = { clients: [], installations: [], classifications: [], categories: [], statuses: [], segments: [] };
+const state = {
+  personnel: { raw: [], filtered: [] },
+  equipment: { raw: [], filtered: [] },
+  equipAssign: { raw: [] },
+  quotes: { raw: [], filtered: [] },
+  projects: { raw: [], filtered: [] }
+};
+
+// ─── Utilities ───
+function esc(s) { if (s == null) return ''; const d = document.createElement('div'); d.textContent = String(s); return d.innerHTML; }
+function fmt(n) { n = +n; if (isNaN(n)) return '0'; if (Math.abs(n)>=1e6) return (n/1e6).toFixed(1)+'M'; if (Math.abs(n)>=1e3) return (n/1e3).toFixed(1)+'K'; return n%1===0?String(n):n.toFixed(1); }
+function fmtCur(n) { return '$' + fmt(n); }
+function fmtInt(n) { return Math.round(n||0).toLocaleString('en'); }
+function groupBy(arr, key) { const m = {}; arr.forEach(r => { const k = r[key] || '(blank)'; (m[k]=m[k]||[]).push(r); }); return m; }
+
+function toast(msg, type = 'info') {
+  const c = document.getElementById('toasts');
+  const t = document.createElement('div');
+  t.className = 'toast ' + type;
+  t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(() => { t.style.opacity='0'; t.style.transform='translateX(40px)'; t.style.transition='all .3s'; setTimeout(() => t.remove(), 350); }, 3500);
+}
+
+// ─── Theme & Sidebar ───
+function toggleTheme() {
+  const h = document.documentElement;
+  const dk = h.getAttribute('data-theme') === 'dark';
+  h.setAttribute('data-theme', dk ? 'light' : 'dark');
+  localStorage.setItem('axess-theme', dk ? 'light' : 'dark');
+  Object.values(charts).forEach(c => { if (c && c.updateOptions) c.updateOptions({ chart: { foreColor: !dk?'#9ca3af':'#6b7280' }, grid: { borderColor: !dk?'#2d3139':'#e5e7eb' }, tooltip: { theme: !dk?'dark':'light' } }, false, false); });
+}
+function toggleSidebar() { document.getElementById('sidebar').classList.toggle('collapsed'); }
+(function() { const s = localStorage.getItem('axess-theme'); if (s) document.documentElement.setAttribute('data-theme', s); })();
+
+// ─── Tabs ───
+const TAB_TITLES = { personnel: 'Personnel Planner', equipment: 'Equipment Manager', quotes: 'Quote Log & Revenue', projects: 'Master Projects' };
+
+function switchTab(tab) {
+  activeTab = tab;
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel-' + tab).classList.add('active');
+  document.querySelectorAll('.nav-item,.mobile-nav button').forEach(b => {
+    b.classList.toggle('active', b.getAttribute('data-tab') === tab);
+    if (b.getAttribute('role') === 'tab') b.setAttribute('aria-selected', b.getAttribute('data-tab') === tab);
+  });
+  document.getElementById('top-title').textContent = TAB_TITLES[tab] || tab;
+  updateTopActions();
+}
+
+function updateTopActions() {
+  const c = document.getElementById('top-actions');
+  if (activeTab === 'personnel') {
+    c.innerHTML = '<label class="upload-pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Import Excel<input type="file" accept=".xlsx,.xls,.csv" onchange="importExcel(this,\'personnel\')"></label>' +
+      '<button class="btn-primary" onclick="openPersonnelModal()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>New Assignment</button>';
+  } else if (activeTab === 'equipment') {
+    c.innerHTML = '<label class="upload-pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Import Excel<input type="file" accept=".xlsx,.xls,.csv" onchange="importExcel(this,\'equipment\')"></label>' +
+      '<button class="btn-primary" onclick="openEquipmentModal()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>New Equipment</button>';
+  } else {
+    c.innerHTML = '';
+  }
+}
+
+// ─── Modal Management ───
+function openModal(name) { document.getElementById('modal-' + name).classList.add('open'); }
+function closeModal(name) { document.getElementById('modal-' + name).classList.remove('open'); }
+
+// ─── Data Loading ───
+async function loadLookups() {
+  const [clients, installations, classifications, categories, statuses, segments] = await Promise.all([
+    sb.from('clients').select('*').order('name'),
+    sb.from('installations').select('*').order('name'),
+    sb.from('support_classifications').select('*').order('value'),
+    sb.from('equipment_categories').select('*').order('value'),
+    sb.from('statuses').select('*'),
+    sb.from('segments').select('*').order('value')
+  ]);
+  lookups.clients = clients.data || [];
+  lookups.installations = installations.data || [];
+  lookups.classifications = classifications.data || [];
+  lookups.categories = categories.data || [];
+  lookups.statuses = statuses.data || [];
+  lookups.segments = segments.data || [];
+  populateFormSelects();
+}
+
+function populateFormSelects() {
+  // Personnel form
+  const pStatus = document.getElementById('pf-status');
+  pStatus.innerHTML = lookups.statuses.filter(s => s.module === 'personnel').map(s => '<option value="'+esc(s.value)+'">'+esc(s.value)+'</option>').join('');
+
+  const pClient = document.getElementById('pf-client');
+  pClient.innerHTML = '<option value="">Select...</option>' + lookups.clients.map(c => '<option value="'+c.id+'">'+esc(c.name)+'</option>').join('');
+
+  const pInstall = document.getElementById('pf-installation');
+  pInstall.innerHTML = '<option value="">Select...</option>' + lookups.installations.map(i => '<option value="'+i.id+'">'+esc(i.name)+'</option>').join('');
+
+  const pClass = document.getElementById('pf-classification');
+  pClass.innerHTML = '<option value="">Select...</option>' + lookups.classifications.map(c => '<option value="'+c.id+'">'+esc(c.value)+'</option>').join('');
+
+  // Equipment form
+  const eCat = document.getElementById('ef-category');
+  eCat.innerHTML = '<option value="">Select...</option>' + lookups.categories.map(c => '<option value="'+c.id+'">'+esc(c.value)+'</option>').join('');
+
+  // Filters
+  populateFilterSelects();
+}
+
+function populateFilterSelects() {
+  const pStatuses = lookups.statuses.filter(s => s.module === 'personnel');
+  fillSelect('p-status', pStatuses.map(s => s.value));
+  fillSelect('p-client', lookups.clients.map(c => c.name));
+  fillSelect('p-installation', lookups.installations.map(i => i.name));
+  fillSelect('p-classification', lookups.classifications.map(c => c.value));
+
+  const eStatuses = lookups.statuses.filter(s => s.module === 'equipment');
+  fillSelect('e-status', eStatuses.map(s => s.value));
+  fillSelect('e-category', lookups.categories.map(c => c.value));
+}
+
+function fillSelect(id, values) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const current = el.value;
+  el.innerHTML = '<option value="">All</option>' + values.map(v => '<option value="'+esc(v)+'">'+esc(v)+'</option>').join('');
+  el.value = current;
+}
+
+async function loadPersonnel() {
+  const { data, error } = await sb.from('v_personnel')
+    .select('*')
+    .order('start_date', { ascending: false });
+  if (error) { toast('Error loading personnel: ' + error.message, 'error'); return; }
+  state.personnel.raw = data || [];
+  state.personnel.filtered = [...state.personnel.raw];
+  document.getElementById('badge-personnel').textContent = state.personnel.raw.length;
+  renderPersonnel();
+}
+
+async function loadEquipment() {
+  const { data, error } = await sb.from('v_equipment')
+    .select('*')
+    .order('description');
+  if (error) { toast('Error loading equipment: ' + error.message, 'error'); return; }
+  state.equipment.raw = data || [];
+  state.equipment.filtered = [...state.equipment.raw];
+  document.getElementById('badge-equipment').textContent = state.equipment.raw.length;
+  renderEquipment();
+}
+
+async function loadEquipmentAssignments() {
+  const { data, error } = await sb.from('v_equipment_assignments')
+    .select('*')
+    .order('start_date', { ascending: false });
+  if (error) return;
+  state.equipAssign.raw = data || [];
+}
+
+async function loadQuotes() {
+  const { data, error } = await sb.from('v_quotes')
+    .select('*')
+    .order('quote_date', { ascending: false });
+  if (error) { toast('Error loading quotes: ' + error.message, 'error'); return; }
+  state.quotes.raw = data || [];
+  state.quotes.filtered = [...state.quotes.raw];
+  document.getElementById('badge-quotes').textContent = state.quotes.raw.length;
+  renderQuotes();
+}
+
+async function loadProjects() {
+  const { data, error } = await sb.from('v_projects')
+    .select('*')
+    .order('created_at', { ascending: false });
+  if (error) { toast('Error loading projects: ' + error.message, 'error'); return; }
+  state.projects.raw = data || [];
+  state.projects.filtered = [...state.projects.raw];
+  document.getElementById('badge-projects').textContent = state.projects.raw.length;
+  renderProjects();
+}
+
+// ─── Filters ───
+function applyFilters(tab) {
+  if (tab === 'personnel') {
+    const status = document.getElementById('p-status').value;
+    const client = document.getElementById('p-client').value;
+    const install = document.getElementById('p-installation').value;
+    const classif = document.getElementById('p-classification').value;
+    state.personnel.filtered = state.personnel.raw.filter(r => {
+      if (status && r.status !== status) return false;
+      if (client && r.client_name !== client) return false;
+      if (install && r.installation_name !== install) return false;
+      if (classif && r.classification_name !== classif) return false;
+      return true;
+    });
+    document.getElementById('p-count').textContent = state.personnel.filtered.length + ' of ' + state.personnel.raw.length;
+    renderPersonnel();
+  } else if (tab === 'equipment') {
+    const status = document.getElementById('e-status').value;
+    const cat = document.getElementById('e-category').value;
+    const calib = document.getElementById('e-calibration').value;
+    state.equipment.filtered = state.equipment.raw.filter(r => {
+      if (status && r.calibration_status !== status) return false;
+      if (cat && r.category_name !== cat) return false;
+      if (calib && r.calibration_status !== calib) return false;
+      return true;
+    });
+    document.getElementById('e-count').textContent = state.equipment.filtered.length + ' of ' + state.equipment.raw.length;
+    renderEquipment();
+  }
+}
+
+function resetFilters(tab) {
+  document.querySelectorAll('#filters-' + tab + ' .filter-input').forEach(el => { el.value = ''; });
+  if (tab === 'personnel') { state.personnel.filtered = [...state.personnel.raw]; renderPersonnel(); }
+  if (tab === 'equipment') { state.equipment.filtered = [...state.equipment.raw]; renderEquipment(); }
+  document.getElementById(tab.charAt(0) + '-count').textContent = '';
+}
+
+// ─── Render KPIs ───
+function renderKPIs(containerId, items) {
+  const c = document.getElementById(containerId);
+  c.innerHTML = items.map(k => {
+    let val = k.value;
+    if (k.format === 'cur') val = fmtCur(val);
+    else if (k.format === 'pct') val = (+val).toFixed(1) + '%';
+    else val = fmtInt(val);
+    return '<div class="kpi-card"><div class="kpi-accent" style="background:'+k.accent+'"></div>' +
+      '<div class="kpi-label">'+esc(k.label)+'</div><div class="kpi-value">'+val+'</div>' +
+      (k.sub ? '<div class="kpi-sub">'+esc(k.sub)+'</div>' : '') + '</div>';
+  }).join('');
+}
+
+// ─── Render Charts ───
+function buildChartGrid(containerId, chartDefs) {
+  const c = document.getElementById(containerId);
+  c.innerHTML = '';
+  chartDefs.forEach(def => {
+    const div = document.createElement('div');
+    div.className = 'chart-card' + (def.wide ? ' wide' : '');
+    div.innerHTML = '<div class="chart-header"><span class="chart-title">'+esc(def.title)+'</span>' +
+      (def.tag ? '<span class="chart-tag">'+esc(def.tag)+'</span>' : '') + '</div><div class="chart-body" id="'+def.id+'"></div>';
+    c.appendChild(div);
+    if (charts[def.id]) { charts[def.id].destroy(); delete charts[def.id]; }
+    const dk = document.documentElement.getAttribute('data-theme') === 'dark';
+    def.options.chart.foreColor = dk ? '#9ca3af' : '#6b7280';
+    def.options.chart.background = 'transparent';
+    if (!def.options.grid) def.options.grid = {};
+    def.options.grid.borderColor = dk ? '#2d3139' : '#e5e7eb';
+    if (!def.options.tooltip) def.options.tooltip = {};
+    def.options.tooltip.theme = dk ? 'dark' : 'light';
+    charts[def.id] = new ApexCharts(document.getElementById(def.id), def.options);
+    charts[def.id].render();
+  });
+}
+
+// ─── PERSONNEL RENDERING ───
+function renderPersonnel() {
+  const d = state.personnel.filtered;
+  const total = d.length;
+  const onSite = d.filter(r => r.status === 'On Site' || r.status === 'Confirmed').length;
+  const planned = d.filter(r => r.status === 'Planned').length;
+  const uniqueTechs = new Set(d.map(r => r.technician_name)).size;
+  const avgDur = total > 0 ? d.reduce((s, r) => s + (r.duration_days || 0), 0) / total : 0;
+
+  renderKPIs('kpi-personnel', [
+    { label: 'Total Assignments', value: total, format: 'int', accent: 'var(--brand)' },
+    { label: 'Active / On Site', value: onSite, format: 'int', accent: 'var(--success)' },
+    { label: 'Planned', value: planned, format: 'int', accent: 'var(--info)' },
+    { label: 'Technicians', value: uniqueTechs, format: 'int', accent: 'var(--warm)' },
+    { label: 'Avg Duration', value: avgDur, format: 'int', sub: 'days', accent: 'var(--warning)' }
+  ]);
+
+  // Gantt (default view)
+  if (personnelView === 'gantt') renderGantt(d, 'personnel-gantt-view');
+
+  // Table
+  const container = document.getElementById('table-personnel');
+  if (total === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div><div class="empty-title">No personnel assignments</div><div class="empty-desc">Click "New Assignment" to create one.</div></div>';
+  } else {
+    container.innerHTML = '<div class="data-table-wrap"><div class="data-table-header"><span class="data-table-title">Assignments ('+total+')</span></div>' +
+      '<table class="data-table"><thead><tr><th>Technician</th><th>Competency</th><th>Start</th><th>End</th><th>Days</th><th>Installation</th><th>Client</th><th>Status</th><th>Work Order</th><th>Actions</th></tr></thead><tbody>' +
+      d.map(r => {
+        const sc = getStatusColor(r.status);
+        return '<tr><td><strong>'+esc(r.technician_name)+'</strong></td>' +
+          '<td>'+esc(r.competency)+'</td>' +
+          '<td class="mono">'+(r.start_date||'—')+'</td>' +
+          '<td class="mono">'+(r.end_date||'—')+'</td>' +
+          '<td class="mono">'+(r.duration_days||'—')+'</td>' +
+          '<td>'+esc(r.installation_name)+'</td>' +
+          '<td>'+esc(r.client_name)+'</td>' +
+          '<td><span class="status-badge" style="background:'+sc+'20;color:'+sc+'">'+esc(r.status)+'</span></td>' +
+          '<td class="mono">'+esc(r.work_order||'')+'</td>' +
+          '<td><div class="action-btns">' +
+          '<button class="action-btn edit" onclick="editPersonnel('+r.id+')" title="Edit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>' +
+          '<button class="action-btn delete" onclick="deletePersonnel('+r.id+')" title="Delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>' +
+          '</div></td></tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+
+  // Charts
+  const sg = groupBy(d, 'status');
+  const sl = Object.keys(sg).sort((a,b) => sg[b].length - sg[a].length);
+  const statusChart = { chart:{type:'donut',height:280}, series:sl.map(s=>sg[s].length), labels:sl, colors:sl.map(s=>getStatusColor(s)),
+    plotOptions:{pie:{donut:{size:'72%',labels:{show:true,total:{show:true,label:'Total',formatter:w=>fmtInt(w.globals.seriesTotals.reduce((a,b)=>a+b,0))}}}}},
+    dataLabels:{enabled:false}, legend:{position:'bottom',fontSize:'12px'}, stroke:{width:2} };
+
+  const ig = groupBy(d, 'installation_name');
+  const ie = Object.entries(ig).map(([k,v])=>[k,v.length]).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  const installChart = { chart:{type:'bar',height:280}, series:[{data:ie.map(e=>e[1])}],
+    plotOptions:{bar:{horizontal:true,borderRadius:6,barHeight:'60%',distributed:true}}, colors:COLORS,
+    xaxis:{categories:ie.map(e=>e[0])}, yaxis:{labels:{style:{fontSize:'11px'},maxWidth:160}},
+    dataLabels:{enabled:true,textAnchor:'start',offsetX:5,style:{fontSize:'11px'}}, legend:{show:false} };
+
+  const cg = groupBy(d, 'client_name');
+  const ce = Object.entries(cg).map(([k,v])=>[k,v.length]).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const clientChart = { chart:{type:'bar',height:280}, series:[{data:ce.map(e=>e[1])}],
+    plotOptions:{bar:{horizontal:true,borderRadius:6,barHeight:'60%',distributed:true}}, colors:COLORS.slice(3),
+    xaxis:{categories:ce.map(e=>e[0])}, yaxis:{labels:{style:{fontSize:'11px'},maxWidth:160}},
+    dataLabels:{enabled:true,textAnchor:'start',offsetX:5,style:{fontSize:'11px'}}, legend:{show:false} };
+
+  // Classification distribution (Expat/Local/Regional)
+  const clg = groupBy(d, 'classification_name');
+  const cle = Object.keys(clg).filter(k => k !== '(blank)').sort();
+  const classifChart = { chart:{type:'donut',height:280}, series:cle.map(s=>clg[s].length), labels:cle,
+    colors:['#e76f51','#2a9d8f','#3b82f6'],
+    plotOptions:{pie:{donut:{size:'72%',labels:{show:true,total:{show:true,label:'Total',formatter:w=>fmtInt(w.globals.seriesTotals.reduce((a,b)=>a+b,0))}}}}},
+    dataLabels:{enabled:false}, legend:{position:'bottom',fontSize:'12px'}, stroke:{width:2} };
+
+  // Competency distribution
+  const cpg = groupBy(d, 'competency');
+  const cpe = Object.entries(cpg).filter(([k])=>k!=='(blank)').map(([k,v])=>[k,v.length]).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  const compChart = { chart:{type:'bar',height:280}, series:[{data:cpe.map(e=>e[1])}],
+    plotOptions:{bar:{horizontal:true,borderRadius:6,barHeight:'60%',distributed:true}}, colors:COLORS.slice(2),
+    xaxis:{categories:cpe.map(e=>e[0])}, yaxis:{labels:{style:{fontSize:'11px'},maxWidth:160}},
+    dataLabels:{enabled:true,textAnchor:'start',offsetX:5,style:{fontSize:'11px'}}, legend:{show:false} };
+
+  // Monthly assignments timeline
+  const monthMap = {};
+  d.forEach(r => { if (r.start_date) { const k = r.start_date.substring(0,7); monthMap[k] = (monthMap[k]||0)+1; }});
+  const months = Object.keys(monthMap).sort();
+  const timelineChart = { chart:{type:'area',height:280,zoom:{enabled:true}},
+    series:[{name:'Assignments',data:months.map(m=>monthMap[m])}],
+    colors:['#009aa6'],
+    fill:{type:'gradient',gradient:{shadeIntensity:1,opacityFrom:0.4,opacityTo:0.05,stops:[0,90,100]}},
+    dataLabels:{enabled:false}, stroke:{curve:'smooth',width:2.5},
+    xaxis:{categories:months,labels:{rotate:-45,style:{fontSize:'10px'}}},
+    yaxis:{labels:{formatter:v=>fmtInt(v)}}, markers:{size:0,hover:{size:5}} };
+
+  const chartDefs = [{ id:'c-p-status', title:'Status Distribution', options:statusChart }];
+  if (cle.length) chartDefs.push({ id:'c-p-classif', title:'Classification', options:classifChart });
+  if (ie.length) chartDefs.push({ id:'c-p-install', title:'By Installation', tag:'top 10', options:installChart });
+  if (ce.length) chartDefs.push({ id:'c-p-client', title:'By Client', options:clientChart });
+  if (cpe.length) chartDefs.push({ id:'c-p-comp', title:'By Competency', tag:'top 10', options:compChart });
+  if (months.length > 1) chartDefs.push({ id:'c-p-timeline', title:'Assignments Over Time', tag:'by month', options:timelineChart, wide:true });
+  buildChartGrid('charts-personnel', chartDefs);
+}
+
+function getStatusColor(status) {
+  const colors = { 'Planned':'#3b82f6','Confirmed':'#7ab800','On Site':'#009aa6','Completed':'#6b7280','Cancelled':'#ef4444','Standby':'#f59e0b',
+    'Available':'#7ab800','Deployed':'#009aa6','In Transit':'#f59e0b','Maintenance':'#e98300','Out of Service':'#ef4444',
+    'Draft':'#6b7280','Sent':'#3b82f6','Won':'#7ab800','Lost':'#ef4444','Expired':'#f59e0b',
+    'Open':'#3b82f6','In Progress':'#009aa6','Pending Invoice':'#f59e0b','Closed':'#6b7280','On Hold':'#e98300' };
+  return colors[status] || COLORS[0];
+}
+
+// ─── EQUIPMENT RENDERING ───
+function renderEquipment() {
+  // Render gantt if in gantt view
+  if (equipmentView === 'gantt') renderEquipmentGantt();
+
+  const d = state.equipment.filtered;
+  const total = d.length;
+  const active = d.filter(r => r.active).length;
+  const valid = d.filter(r => (r.computed_calibration_status || r.calibration_status) === 'Valid').length;
+  const dueSoon = d.filter(r => (r.computed_calibration_status || r.calibration_status) === 'Due Soon').length;
+  const expired = d.filter(r => (r.computed_calibration_status || r.calibration_status) === 'Expired').length;
+
+  renderKPIs('kpi-equipment', [
+    { label: 'Total Equipment', value: total, format: 'int', accent: 'var(--brand)' },
+    { label: 'Active', value: active, format: 'int', accent: 'var(--success)' },
+    { label: 'Calibrated', value: valid, format: 'int', accent: 'var(--info)' },
+    { label: 'Due Soon', value: dueSoon, format: 'int', accent: 'var(--warning)' },
+    { label: 'Expired', value: expired, format: 'int', accent: 'var(--danger)' }
+  ]);
+
+  const container = document.getElementById('table-equipment');
+  if (total === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></div><div class="empty-title">No equipment registered</div><div class="empty-desc">Click "New Equipment" to add one.</div></div>';
+  } else {
+    container.innerHTML = '<div class="data-table-wrap"><div class="data-table-header"><span class="data-table-title">Equipment Inventory ('+total+')</span></div>' +
+      '<table class="data-table"><thead><tr><th>Description</th><th>ID Code</th><th>Category</th><th>Calibration Status</th><th>Calibration Due</th><th>Certificate</th><th>Active</th><th>Actions</th></tr></thead><tbody>' +
+      d.map(r => {
+        const cs = r.calibration_status || 'N/A';
+        const cc = cs === 'Valid' ? 'var(--success)' : cs === 'Due Soon' ? 'var(--warning)' : cs === 'Expired' ? 'var(--danger)' : 'var(--text-3)';
+        const certHtml = r.calibration_certificate_url ? '<a href="'+esc(r.calibration_certificate_url)+'" target="_blank" class="cert-link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>PDF</a>' : '—';
+        return '<tr><td><strong>'+esc(r.description)+'</strong></td>' +
+          '<td class="mono">'+esc(r.equipment_id_code||'—')+'</td>' +
+          '<td>'+esc(r.category_name)+'</td>' +
+          '<td><span class="status-badge" style="background:'+cc+'20;color:'+cc+'">'+esc(cs)+'</span></td>' +
+          '<td class="mono">'+(r.calibration_due_date||'—')+'</td>' +
+          '<td>'+certHtml+'</td>' +
+          '<td>'+(r.active ? 'Yes' : 'No')+'</td>' +
+          '<td><div class="action-btns">' +
+          '<button class="action-btn edit" onclick="editEquipment('+r.id+')" title="Edit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>' +
+          '<button class="action-btn delete" onclick="deleteEquipment('+r.id+')" title="Delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>' +
+          '</div></td></tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+
+  // Charts
+  const calibGroups = { Valid:0, 'Due Soon':0, Expired:0, 'N/A':0 };
+  d.forEach(r => { const s = r.calibration_status || 'N/A'; if (calibGroups[s] !== undefined) calibGroups[s]++; });
+  const calibChart = { chart:{type:'donut',height:280}, series:Object.values(calibGroups), labels:Object.keys(calibGroups),
+    colors:['#7ab800','#f59e0b','#ef4444','#9ca3af'],
+    plotOptions:{pie:{donut:{size:'72%',labels:{show:true,total:{show:true,label:'Total',formatter:w=>fmtInt(w.globals.seriesTotals.reduce((a,b)=>a+b,0))}}}}},
+    dataLabels:{enabled:false}, legend:{position:'bottom',fontSize:'12px'}, stroke:{width:2} };
+
+  const cg = groupBy(d, 'category_name');
+  const ce = Object.entries(cg).map(([k,v])=>[k,v.length]).sort((a,b)=>b[1]-a[1]);
+  const catChart = { chart:{type:'bar',height:280}, series:[{name:'Equipment',data:ce.map(e=>e[1])}], colors:[COLORS[4]],
+    plotOptions:{bar:{borderRadius:5,columnWidth:'55%'}}, dataLabels:{enabled:false},
+    xaxis:{categories:ce.map(e=>e[0]),labels:{style:{fontSize:'10px'},rotate:-45}}, legend:{show:false} };
+
+  // Active vs Inactive
+  const activeCount = d.filter(r => r.active).length;
+  const inactiveCount = d.length - activeCount;
+  const activeChart = { chart:{type:'donut',height:280}, series:[activeCount, inactiveCount], labels:['Active','Inactive'],
+    colors:['#7ab800','#ef4444'],
+    plotOptions:{pie:{donut:{size:'72%',labels:{show:true,total:{show:true,label:'Total',formatter:w=>fmtInt(w.globals.seriesTotals.reduce((a,b)=>a+b,0))}}}}},
+    dataLabels:{enabled:false}, legend:{position:'bottom',fontSize:'12px'}, stroke:{width:2} };
+
+  // Calibration expiry timeline
+  const calibByMonth = {};
+  d.forEach(r => {
+    if (r.calibration_due_date) {
+      const k = r.calibration_due_date.substring(0,7);
+      calibByMonth[k] = (calibByMonth[k]||0)+1;
+    }
+  });
+  const calibMonths = Object.keys(calibByMonth).sort();
+  const nowKey = new Date().toISOString().substring(0,7);
+  const calibTimeColors = calibMonths.map(k => k <= nowKey ? '#ef4444' : '#2a9d8f');
+  const expiryChart = { chart:{type:'bar',height:280},
+    series:[{name:'Expiring',data:calibMonths.map(k=>calibByMonth[k])}],
+    plotOptions:{bar:{borderRadius:5,columnWidth:'60%',distributed:true}}, colors:calibTimeColors,
+    xaxis:{categories:calibMonths,labels:{style:{fontSize:'10px'},rotate:-45}},
+    yaxis:{labels:{formatter:v=>fmtInt(v)}}, dataLabels:{enabled:false}, legend:{show:false} };
+
+  const chartDefs = [{ id:'c-e-calib', title:'Calibration Status', options:calibChart }];
+  if (ce.length) chartDefs.push({ id:'c-e-cat', title:'By Category', options:catChart });
+  chartDefs.push({ id:'c-e-active', title:'Active vs Inactive', options:activeChart });
+  if (calibMonths.length > 1) chartDefs.push({ id:'c-e-expiry', title:'Calibration Expiry Timeline', tag:'by month', options:expiryChart, wide:true });
+  buildChartGrid('charts-equipment', chartDefs);
+}
+
+// ─── QUOTES RENDERING ───
+function renderQuotes() {
+  const d = state.quotes.filtered;
+  const total = d.length;
+  const totalRev = d.reduce((s,r) => s + (+r.sum_total || 0), 0);
+  const won = d.filter(r => r.status === 'Won').length;
+  const winRate = total > 0 ? (won / total * 100) : 0;
+  const avgVal = total > 0 ? totalRev / total : 0;
+
+  renderKPIs('kpi-quotes', [
+    { label: 'Total Quotes', value: total, format: 'int', accent: 'var(--brand)' },
+    { label: 'Pipeline Value', value: totalRev, format: 'cur', accent: 'var(--info)' },
+    { label: 'Won', value: won, format: 'int', accent: 'var(--success)' },
+    { label: 'Win Rate', value: winRate, format: 'pct', accent: 'var(--warm)' },
+    { label: 'Avg Quote', value: avgVal, format: 'cur', accent: 'var(--warning)' }
+  ]);
+
+  const container = document.getElementById('table-quotes');
+  if (total === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div><div class="empty-title">No quotes yet</div><div class="empty-desc">Quotes will appear here once added to the database.</div></div>';
+  } else {
+    container.innerHTML = '<div class="data-table-wrap"><div class="data-table-header"><span class="data-table-title">Quotes ('+total+')</span></div>' +
+      '<table class="data-table"><thead><tr><th>Title</th><th>Customer</th><th>Status</th><th>Segment</th><th>Responsible</th><th>Date</th><th>Amount</th><th>Probability</th></tr></thead><tbody>' +
+      d.slice(0,50).map(r => {
+        const sc = getStatusColor(r.status);
+        return '<tr><td><strong>'+esc(r.title)+'</strong></td>' +
+          '<td>'+esc(r.customer_name)+'</td>' +
+          '<td><span class="status-badge" style="background:'+sc+'20;color:'+sc+'">'+esc(r.status)+'</span></td>' +
+          '<td>'+esc(r.segment_name)+'</td>' +
+          '<td>'+esc(r.responsible||'')+'</td>' +
+          '<td class="mono">'+(r.quote_date||'—')+'</td>' +
+          '<td class="mono">'+fmtCur(r.sum_total||0)+'</td>' +
+          '<td class="mono">'+(r.probability != null ? r.probability+'%' : '—')+'</td></tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+
+  // Charts
+  if (total > 0) {
+    const sg = groupBy(d, 'status');
+    const sl = Object.keys(sg).sort((a,b) => sg[b].length - sg[a].length);
+    const statusChart = { chart:{type:'donut',height:280}, series:sl.map(s=>sg[s].length), labels:sl, colors:sl.map(s=>getStatusColor(s)),
+      plotOptions:{pie:{donut:{size:'72%',labels:{show:true,total:{show:true,label:'Total',formatter:w=>fmtInt(w.globals.seriesTotals.reduce((a,b)=>a+b,0))}}}}},
+      dataLabels:{enabled:false}, legend:{position:'bottom',fontSize:'12px'}, stroke:{width:2} };
+
+    const segg = {};
+    d.forEach(r => { const s = r.segment_name || '(blank)'; segg[s] = (segg[s]||0) + (+r.sum_total||0); });
+    const se = Object.entries(segg).sort((a,b)=>b[1]-a[1]);
+    const segChart = { chart:{type:'bar',height:280}, series:[{data:se.map(e=>e[1])}],
+      plotOptions:{bar:{horizontal:true,borderRadius:6,barHeight:'60%',distributed:true}}, colors:COLORS,
+      xaxis:{categories:se.map(e=>e[0])}, yaxis:{labels:{style:{fontSize:'11px'}}},
+      dataLabels:{enabled:true,textAnchor:'start',offsetX:5,style:{fontSize:'11px'},formatter:v=>fmtCur(v)}, legend:{show:false},
+      tooltip:{y:{formatter:v=>fmtCur(v)}} };
+
+    // Top Clients by revenue
+    const clg = {};
+    d.forEach(r => { const c = r.customer_name || '(blank)'; clg[c] = (clg[c]||0) + (+r.sum_total||0); });
+    const cle = Object.entries(clg).sort((a,b)=>b[1]-a[1]).slice(0,10);
+    const clientChart = { chart:{type:'bar',height:280}, series:[{data:cle.map(e=>e[1])}],
+      plotOptions:{bar:{horizontal:true,borderRadius:6,barHeight:'60%',distributed:true}}, colors:COLORS,
+      xaxis:{categories:cle.map(e=>e[0])}, yaxis:{labels:{style:{fontSize:'11px'},maxWidth:160}},
+      dataLabels:{enabled:true,textAnchor:'start',offsetX:5,style:{fontSize:'11px'},formatter:v=>fmtCur(v)}, legend:{show:false},
+      tooltip:{y:{formatter:v=>fmtCur(v)}} };
+
+    // Revenue timeline by month
+    const monthRev = {};
+    d.forEach(r => { if (r.quote_date) { const k = r.quote_date.substring(0,7); monthRev[k] = (monthRev[k]||0) + (+r.sum_total||0); }});
+    const qMonths = Object.keys(monthRev).sort();
+    const timeChart = { chart:{type:'area',height:280,zoom:{enabled:true}},
+      series:[{name:'Revenue',data:qMonths.map(m=>monthRev[m])}],
+      colors:['#e98300'],
+      fill:{type:'gradient',gradient:{shadeIntensity:1,opacityFrom:0.4,opacityTo:0.05,stops:[0,90,100]}},
+      dataLabels:{enabled:false}, stroke:{curve:'smooth',width:2.5},
+      xaxis:{categories:qMonths,labels:{rotate:-45,style:{fontSize:'10px'}}},
+      yaxis:{labels:{formatter:v=>fmtCur(v)}}, markers:{size:0,hover:{size:5}},
+      tooltip:{y:{formatter:v=>fmtCur(v)}} };
+
+    // Probability distribution
+    const probGroups = {'0-25':0,'26-50':0,'51-75':0,'76-100':0};
+    d.forEach(r => { const p = r.probability||0; if (p<=25) probGroups['0-25']++; else if (p<=50) probGroups['26-50']++; else if (p<=75) probGroups['51-75']++; else probGroups['76-100']++; });
+    const probChart = { chart:{type:'bar',height:280}, series:[{name:'Quotes',data:Object.values(probGroups)}],
+      colors:['#3b82f6'], plotOptions:{bar:{borderRadius:5,columnWidth:'55%'}}, dataLabels:{enabled:true},
+      xaxis:{categories:Object.keys(probGroups)}, yaxis:{labels:{formatter:v=>fmtInt(v)}}, legend:{show:false} };
+
+    const qCharts = [
+      { id:'c-q-status', title:'Quote Status', options:statusChart },
+      { id:'c-q-segment', title:'Revenue by Segment', options:segChart }
+    ];
+    if (cle.length) qCharts.push({ id:'c-q-clients', title:'Top Clients', tag:'by revenue', options:clientChart });
+    qCharts.push({ id:'c-q-prob', title:'Probability Distribution', options:probChart });
+    if (qMonths.length > 1) qCharts.push({ id:'c-q-timeline', title:'Revenue Over Time', tag:'by month', options:timeChart, wide:true });
+    buildChartGrid('charts-quotes', qCharts);
+  }
+}
+
+// ─── PROJECTS RENDERING ───
+function renderProjects() {
+  const d = state.projects.filtered;
+  const total = d.length;
+  const totalPO = d.reduce((s,r) => s + (+r.po_value || 0), 0);
+  const invoiced = d.filter(r => r.invoice_issued).length;
+  const open = d.filter(r => r.status === 'Open' || r.status === 'In Progress').length;
+
+  renderKPIs('kpi-projects', [
+    { label: 'Work Orders', value: total, format: 'int', accent: 'var(--brand)' },
+    { label: 'Total PO Value', value: totalPO, format: 'cur', accent: 'var(--info)' },
+    { label: 'Active', value: open, format: 'int', accent: 'var(--success)' },
+    { label: 'Invoiced', value: invoiced, format: 'int', accent: 'var(--warm)' },
+    { label: 'Pending', value: total - invoiced, format: 'int', accent: 'var(--warning)' }
+  ]);
+
+  const container = document.getElementById('table-projects');
+  if (total === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div><div class="empty-title">No projects yet</div><div class="empty-desc">Projects will appear here once added to the database.</div></div>';
+  } else {
+    container.innerHTML = '<div class="data-table-wrap"><div class="data-table-header"><span class="data-table-title">Projects ('+total+')</span></div>' +
+      '<table class="data-table"><thead><tr><th>Work Order</th><th>Description</th><th>Client</th><th>Installation</th><th>PO Value</th><th>Status</th><th>Responsible</th></tr></thead><tbody>' +
+      d.slice(0,50).map(r => {
+        const sc = getStatusColor(r.status);
+        return '<tr><td class="mono"><strong>'+esc(r.work_order_number||'—')+'</strong></td>' +
+          '<td>'+esc(r.description||'')+'</td>' +
+          '<td>'+esc(r.client_name)+'</td>' +
+          '<td>'+esc(r.installation_name)+'</td>' +
+          '<td class="mono">'+fmtCur(r.po_value||0)+'</td>' +
+          '<td><span class="status-badge" style="background:'+sc+'20;color:'+sc+'">'+esc(r.status)+'</span></td>' +
+          '<td>'+esc(r.responsible||'')+'</td></tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+
+  if (total > 0) {
+    const sg = groupBy(d, 'status');
+    const sl = Object.keys(sg).sort((a,b) => sg[b].length - sg[a].length);
+    const statusChart = { chart:{type:'donut',height:280}, series:sl.map(s=>sg[s].length), labels:sl, colors:sl.map(s=>getStatusColor(s)),
+      plotOptions:{pie:{donut:{size:'72%',labels:{show:true,total:{show:true,label:'Total',formatter:w=>fmtInt(w.globals.seriesTotals.reduce((a,b)=>a+b,0))}}}}},
+      dataLabels:{enabled:false}, legend:{position:'bottom',fontSize:'12px'}, stroke:{width:2} };
+
+    // Revenue by Installation
+    const igv = {};
+    d.forEach(r => { const i = r.installation_name || '(blank)'; igv[i] = (igv[i]||0) + (+r.po_value||0); });
+    const ie = Object.entries(igv).sort((a,b)=>b[1]-a[1]).slice(0,10);
+    const installChart = { chart:{type:'bar',height:280}, series:[{data:ie.map(e=>e[1])}],
+      plotOptions:{bar:{horizontal:true,borderRadius:6,barHeight:'60%',distributed:true}}, colors:COLORS,
+      xaxis:{categories:ie.map(e=>e[0])}, yaxis:{labels:{style:{fontSize:'11px'},maxWidth:160}},
+      dataLabels:{enabled:true,textAnchor:'start',offsetX:5,style:{fontSize:'11px'},formatter:v=>fmtCur(v)}, legend:{show:false},
+      tooltip:{y:{formatter:v=>fmtCur(v)}} };
+
+    // Revenue by Responsible
+    const rgv = {};
+    d.forEach(r => { const rr = r.responsible || '(blank)'; rgv[rr] = (rgv[rr]||0) + (+r.po_value||0); });
+    const re = Object.entries(rgv).filter(([k])=>k!=='(blank)').sort((a,b)=>b[1]-a[1]).slice(0,8);
+    const respChart = { chart:{type:'bar',height:280}, series:[{data:re.map(e=>e[1])}],
+      plotOptions:{bar:{horizontal:true,borderRadius:6,barHeight:'60%',distributed:true}}, colors:COLORS.slice(3),
+      xaxis:{categories:re.map(e=>e[0])}, yaxis:{labels:{style:{fontSize:'11px'},maxWidth:160}},
+      dataLabels:{enabled:true,textAnchor:'start',offsetX:5,style:{fontSize:'11px'},formatter:v=>fmtCur(v)}, legend:{show:false},
+      tooltip:{y:{formatter:v=>fmtCur(v)}} };
+
+    // PO Value vs Invoiced
+    const invoicedVal = d.filter(r=>r.invoice_issued).reduce((s,r)=>s+(+r.po_value||0),0);
+    const pendingVal = totalPO - invoicedVal;
+    const poInvChart = { chart:{type:'donut',height:280}, series:[invoicedVal, pendingVal], labels:['Invoiced','Pending'],
+      colors:['#7ab800','#f59e0b'],
+      plotOptions:{pie:{donut:{size:'72%',labels:{show:true,total:{show:true,label:'Total PO',formatter:()=>fmtCur(totalPO)}}}}},
+      dataLabels:{enabled:false}, legend:{position:'bottom',fontSize:'12px'}, stroke:{width:2},
+      tooltip:{y:{formatter:v=>fmtCur(v)}} };
+
+    const prCharts = [{ id:'c-pr-status', title:'Project Status', options:statusChart }];
+    if (ie.length) prCharts.push({ id:'c-pr-install', title:'Revenue by Installation', tag:'top 10', options:installChart });
+    prCharts.push({ id:'c-pr-poinv', title:'Invoiced vs Pending', options:poInvChart });
+    if (re.length) prCharts.push({ id:'c-pr-resp', title:'Top Responsible', tag:'by PO value', options:respChart });
+    buildChartGrid('charts-projects', prCharts);
+  }
+}
+
+// ─── PERSONNEL CRUD ───
+function openPersonnelModal(data) {
+  document.getElementById('modal-personnel-title').textContent = data ? 'Edit Assignment' : 'New Personnel Assignment';
+  document.getElementById('pf-id').value = data ? data.id : '';
+  document.getElementById('pf-name').value = data ? data.technician_name : '';
+  document.getElementById('pf-competency').value = data ? data.competency : '';
+  document.getElementById('pf-start').value = data ? data.start_date : '';
+  document.getElementById('pf-end').value = data ? data.end_date || '' : '';
+  document.getElementById('pf-duration').value = data ? data.duration_days || '' : '';
+  document.getElementById('pf-status').value = data ? data.status : 'Planned';
+  document.getElementById('pf-client').value = data ? data.client_id || '' : '';
+  document.getElementById('pf-installation').value = data ? data.installation_id || '' : '';
+  document.getElementById('pf-workorder').value = data ? data.work_order || '' : '';
+  document.getElementById('pf-classification').value = data ? data.support_classification_id || '' : '';
+  document.getElementById('pf-scope').value = data ? data.scope || '' : '';
+  openModal('personnel');
+}
+
+async function editPersonnel(id) {
+  const record = state.personnel.raw.find(r => r.id === id);
+  if (record) openPersonnelModal(record);
+}
+
+async function savePersonnel(e) {
+  e.preventDefault();
+  const id = document.getElementById('pf-id').value;
+  const name = document.getElementById('pf-name').value.trim();
+  const competency = document.getElementById('pf-competency').value.trim();
+
+  // Upsert technician
+  let techId;
+  const { data: existingTech } = await sb.from('technicians').select('id').eq('name', name).maybeSingle();
+  if (existingTech) {
+    techId = existingTech.id;
+    if (competency) await sb.from('technicians').update({ competency }).eq('id', techId);
+  } else {
+    const { data: newTech, error } = await sb.from('technicians').insert({ name, competency }).select('id').single();
+    if (error) { toast('Error creating technician: ' + error.message, 'error'); return false; }
+    techId = newTech.id;
+  }
+
+  const record = {
+    technician_id: techId,
+    start_date: document.getElementById('pf-start').value,
+    end_date: document.getElementById('pf-end').value || null,
+    duration_days: parseInt(document.getElementById('pf-duration').value) || null,
+    status: document.getElementById('pf-status').value,
+    client_id: document.getElementById('pf-client').value || null,
+    installation_id: document.getElementById('pf-installation').value || null,
+    work_order: document.getElementById('pf-workorder').value || null,
+    support_classification_id: document.getElementById('pf-classification').value || null,
+    scope: document.getElementById('pf-scope').value || null
+  };
+
+  // Auto-calculate duration
+  if (record.start_date && record.end_date && !record.duration_days) {
+    const diff = (new Date(record.end_date) - new Date(record.start_date)) / 864e5;
+    record.duration_days = Math.round(diff);
+  }
+
+  let error;
+  if (id) {
+    ({ error } = await sb.from('personnel_assignments').update(record).eq('id', id));
+  } else {
+    ({ error } = await sb.from('personnel_assignments').insert(record));
+  }
+
+  if (error) { toast('Error saving: ' + error.message, 'error'); return false; }
+  toast(id ? 'Assignment updated' : 'Assignment created', 'success');
+  closeModal('personnel');
+  await loadPersonnel();
+  return false;
+}
+
+function deletePersonnel(id) {
+  deleteTarget = { table: 'personnel_assignments', id };
+  openModal('delete');
+}
+
+// ─── EQUIPMENT CRUD ───
+function openEquipmentModal(data) {
+  document.getElementById('modal-equipment-title').textContent = data ? 'Edit Equipment' : 'New Equipment';
+  document.getElementById('ef-id').value = data ? data.id : '';
+  document.getElementById('ef-description').value = data ? data.description : '';
+  document.getElementById('ef-code').value = data ? data.equipment_id_code || '' : '';
+  document.getElementById('ef-category').value = data ? data.category_id || '' : '';
+  document.getElementById('ef-calibstatus').value = data ? data.calibration_status || '' : '';
+  document.getElementById('ef-calibdate').value = data ? data.calibration_due_date || '' : '';
+  document.getElementById('ef-active').value = data ? String(data.active) : 'true';
+  document.getElementById('ef-cert-url').value = data?.calibration_certificate_url || '';
+  document.getElementById('ef-cert-file').value = '';
+  pendingCertFile = null;
+  const certName = document.getElementById('ef-cert-name');
+  if (data?.calibration_certificate_url) {
+    certName.innerHTML = '<a href="'+esc(data.calibration_certificate_url)+'" target="_blank" class="cert-link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>View current certificate</a>';
+  } else {
+    certName.textContent = '';
+  }
+  openModal('equipment');
+}
+
+async function editEquipment(id) {
+  const record = state.equipment.raw.find(r => r.id === id);
+  if (record) openEquipmentModal(record);
+}
+
+async function saveEquipment(e) {
+  e.preventDefault();
+  const id = document.getElementById('ef-id').value;
+  const certUrl = document.getElementById('ef-cert-url').value;
+  const record = {
+    description: document.getElementById('ef-description').value.trim(),
+    equipment_id_code: document.getElementById('ef-code').value.trim() || null,
+    category_id: document.getElementById('ef-category').value || null,
+    calibration_status: document.getElementById('ef-calibstatus').value || null,
+    calibration_due_date: document.getElementById('ef-calibdate').value || null,
+    active: document.getElementById('ef-active').value === 'true'
+  };
+
+  let error, savedId;
+  if (id) {
+    ({ error } = await sb.from('equipment').update(record).eq('id', id));
+    savedId = id;
+  } else {
+    const { data, error: insertErr } = await sb.from('equipment').insert(record).select('id').single();
+    error = insertErr;
+    savedId = data?.id;
+  }
+
+  if (error) { toast('Error saving: ' + error.message, 'error'); return false; }
+
+  // Upload certificate if pending
+  if (pendingCertFile && savedId) {
+    const url = await uploadCertificate(savedId);
+    if (url) {
+      await sb.from('equipment').update({ calibration_certificate_url: url }).eq('id', savedId);
+    }
+  } else if (certUrl) {
+    await sb.from('equipment').update({ calibration_certificate_url: certUrl }).eq('id', savedId);
+  }
+
+  toast(id ? 'Equipment updated' : 'Equipment created', 'success');
+  pendingCertFile = null;
+  closeModal('equipment');
+  await loadEquipment();
+  return false;
+}
+
+function deleteEquipment(id) {
+  deleteTarget = { table: 'equipment', id };
+  openModal('delete');
+}
+
+// ─── Delete confirm ───
+async function confirmDelete() {
+  if (!deleteTarget) return;
+  const { error } = await sb.from(deleteTarget.table).delete().eq('id', deleteTarget.id);
+  if (error) { toast('Error deleting: ' + error.message, 'error'); closeModal('delete'); return; }
+  toast('Record deleted', 'success');
+  closeModal('delete');
+  deleteTarget = null;
+  if (activeTab === 'personnel') await loadPersonnel();
+  else if (activeTab === 'equipment') await loadEquipment();
+}
+
+// ─── Excel Import ───
+function excelDateToISO(v) {
+  if (!v) return null;
+  if (v instanceof Date) return isNaN(v.getTime()) ? null : v.toISOString().split('T')[0];
+  if (typeof v === 'number' && v > 25000 && v < 60000) {
+    const d = new Date((v - 25569) * 864e5);
+    return isNaN(d.getTime()) ? null : d.toISOString().split('T')[0];
+  }
+  if (typeof v === 'string') {
+    const d = new Date(v);
+    return isNaN(d.getTime()) ? null : d.toISOString().split('T')[0];
+  }
+  return null;
+}
+
+async function importExcel(input, type) {
+  try {
+    const file = input.files[0];
+    if (!file) return;
+    input.value = '';
+    toast('Reading ' + file.name + '...', 'info');
+
+    const data = await file.arrayBuffer();
+    const wb = XLSX.read(data);
+    toast('Sheets found: ' + wb.SheetNames.join(', '), 'info');
+
+    if (type === 'personnel') {
+      const sheetName = wb.SheetNames.find(s => s.toLowerCase().includes('planner') && !s.toLowerCase().includes('equipment')) || wb.SheetNames[0];
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName]);
+      toast('Sheet "' + sheetName + '": ' + rows.length + ' rows found', 'info');
+      if (!rows.length) { toast('No data found', 'error'); return; }
+      await importPersonnelRows(rows);
+    } else if (type === 'equipment') {
+      const sheetName = wb.SheetNames.find(s => s.toLowerCase().includes('equipment')) || wb.SheetNames[0];
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName]);
+      toast('Sheet "' + sheetName + '": ' + rows.length + ' rows found', 'info');
+      if (!rows.length) { toast('No data found', 'error'); return; }
+      await importEquipmentRows(rows);
+    }
+  } catch (err) {
+    toast('Import error: ' + err.message, 'error');
+    console.error('Import error:', err);
+  }
+}
+
+async function getOrCreateLookup(table, field, value) {
+  if (!value || !value.toString().trim()) return null;
+  const v = value.toString().trim();
+  const { data } = await sb.from(table).select('id').eq(field, v).maybeSingle();
+  if (data) return data.id;
+  const { data: newRec, error } = await sb.from(table).insert({ [field]: v }).select('id').single();
+  if (error) return null;
+  return newRec.id;
+}
+
+async function importPersonnelRows(rows) {
+  let imported = 0, skipped = 0, errors = [];
+  toast('Importing ' + rows.length + ' personnel records...', 'info');
+
+  for (let i = 0; i < rows.length; i++) {
+    try {
+      const row = rows[i];
+      const name = (row['Technician Name'] || row['Name'] || '').toString().trim();
+      if (!name) { skipped++; continue; }
+
+      const competency = (row['Competency'] || row['Designation'] || '').toString().trim();
+      const startDate = excelDateToISO(row['Start Date'] || row['Start']);
+      const endDate = excelDateToISO(row['End Date'] || row['End']);
+      const status = (row['Status'] || 'Planned').toString().trim();
+      const workOrder = (row['Work Order'] || row['WO'] || '').toString().trim();
+      const scope = (row['Scope'] || '').toString().trim();
+      const clientName = (row['Client'] || '').toString().trim();
+      const installName = (row['Installation'] || '').toString().trim();
+      const classifName = (row['Support Classification'] || row['Classification'] || '').toString().trim();
+
+      // Calculate duration from dates
+      let durationDays = null;
+      if (startDate && endDate) {
+        durationDays = Math.round((new Date(endDate) - new Date(startDate)) / 864e5);
+      }
+
+      // Get or create technician
+      let techId;
+      const { data: tech, error: techErr } = await sb.from('technicians').select('id').eq('name', name).maybeSingle();
+      if (techErr) { errors.push('Row '+(i+1)+' tech lookup: '+techErr.message); skipped++; continue; }
+      if (tech) { techId = tech.id; }
+      else {
+        const { data: newTech, error: newTechErr } = await sb.from('technicians').insert({ name, competency }).select('id').single();
+        if (newTechErr) { errors.push('Row '+(i+1)+' tech create: '+newTechErr.message); skipped++; continue; }
+        techId = newTech.id;
+      }
+
+      const clientId = clientName ? await getOrCreateLookup('clients', 'name', clientName) : null;
+      const installId = installName ? await getOrCreateLookup('installations', 'name', installName) : null;
+      const classifId = classifName ? await getOrCreateLookup('support_classifications', 'value', classifName) : null;
+
+      const { error } = await sb.from('personnel_assignments').insert({
+        technician_id: techId,
+        start_date: startDate || new Date().toISOString().split('T')[0],
+        end_date: endDate,
+        duration_days: durationDays,
+        status: status,
+        work_order: workOrder || null,
+        scope: scope || null,
+        client_id: clientId,
+        installation_id: installId,
+        support_classification_id: classifId
+      });
+      if (error) { errors.push('Row '+(i+1)+': '+error.message); skipped++; } else imported++;
+
+      // Progress update every 50 rows
+      if ((i+1) % 50 === 0) toast('Progress: ' + (i+1) + '/' + rows.length, 'info');
+    } catch (rowErr) {
+      errors.push('Row '+(i+1)+': '+rowErr.message);
+      skipped++;
+    }
+  }
+
+  if (errors.length > 0) console.error('Import errors:', errors);
+  toast('Imported ' + imported + ' records' + (skipped ? ', ' + skipped + ' skipped' : ''), imported ? 'success' : 'error');
+  await loadLookups();
+  await loadPersonnel();
+}
+
+async function importEquipmentRows(rows) {
+  let imported = 0, skipped = 0, errors = [];
+  toast('Importing ' + rows.length + ' equipment records...', 'info');
+
+  for (let i = 0; i < rows.length; i++) {
+    try {
+      const row = rows[i];
+      const desc = (row['Description & ID'] || row['Description'] || row['Equipment Name'] || row['Equipment'] || '').toString().trim();
+      if (!desc) { skipped++; continue; }
+
+      const catName = (row['Category'] || row['Equipment type'] || row['Scope'] || '').toString().trim();
+      const calibDate = excelDateToISO(row['Calibration End Date'] || row['Calibration Due Date'] || row['Calibration due date']);
+
+      let calibStatus = 'N/A';
+      if (calibDate) {
+        const d = new Date(calibDate);
+        const now = new Date();
+        const diff = (d - now) / 864e5;
+        if (diff < 0) calibStatus = 'Expired';
+        else if (diff < 90) calibStatus = 'Due Soon';
+        else calibStatus = 'Valid';
+      }
+
+      const categoryId = catName ? await getOrCreateLookup('equipment_categories', 'value', catName) : null;
+
+      // Upsert equipment
+      let eqId;
+      const { data: existEq } = await sb.from('equipment').select('id').eq('description', desc).maybeSingle();
+      if (existEq) { eqId = existEq.id; }
+      else {
+        const { data: newEq, error: eqErr } = await sb.from('equipment').insert({
+          description: desc, equipment_id_code: null, category_id: categoryId,
+          calibration_due_date: calibDate, calibration_status: calibStatus, active: true
+        }).select('id').single();
+        if (eqErr) { errors.push('Row '+(i+1)+': '+eqErr.message); skipped++; continue; }
+        eqId = newEq.id;
+      }
+
+      // Create assignment if dates exist
+      const startDate = excelDateToISO(row['Start Date'] || row['Start']);
+      const endDate = excelDateToISO(row['End Date'] || row['End']);
+      const clientName = (row['Client'] || '').toString().trim();
+      const installName = (row['Installation'] || '').toString().trim();
+      const statusRaw = (row['Status'] || '').toString().trim();
+      const workOrder = (row['Work Order'] || '').toString().trim();
+      const scope = (row['Scope'] || '').toString().trim();
+
+      if (startDate) {
+        const clientId = clientName ? await getOrCreateLookup('clients', 'name', clientName) : null;
+        const installId = installName ? await getOrCreateLookup('installations', 'name', installName) : null;
+        const { error: assignErr } = await sb.from('equipment_assignments').insert({
+          equipment_id: eqId, start_date: startDate, end_date: endDate,
+          client_id: clientId, installation_id: installId,
+          status: statusRaw || 'Deployed', work_order: workOrder || null, scope: scope || null
+        });
+        if (assignErr) errors.push('Row '+(i+1)+' assign: '+assignErr.message);
+      }
+      imported++;
+    } catch (rowErr) {
+      errors.push('Row '+(i+1)+': '+rowErr.message);
+      skipped++;
+    }
+  }
+
+  if (errors.length > 0) console.error('Import errors:', errors);
+  toast('Imported ' + imported + ' records' + (skipped ? ', ' + skipped + ' skipped' : ''), imported ? 'success' : 'error');
+  await loadLookups();
+  await loadEquipment();
+  await loadEquipmentAssignments();
+}
+
+// ─── PDF Upload ───
+let pendingCertFile = null;
+
+function onCertFileSelected(input) {
+  const file = input.files[0];
+  if (!file) return;
+  pendingCertFile = file;
+  document.getElementById('ef-cert-name').textContent = file.name;
+}
+
+async function uploadCertificate(equipmentId) {
+  if (!pendingCertFile) return null;
+  const ext = pendingCertFile.name.split('.').pop();
+  const path = 'equipment/' + equipmentId + '/cert_' + Date.now() + '.' + ext;
+  const { error } = await sb.storage.from('certificates').upload(path, pendingCertFile, { contentType: 'application/pdf', upsert: true });
+  if (error) { toast('Error uploading certificate: ' + error.message, 'error'); return null; }
+  const { data } = sb.storage.from('certificates').getPublicUrl(path);
+  pendingCertFile = null;
+  return data.publicUrl;
+}
+
+// ─── Gantt Chart ───
+let personnelView = 'gantt';
+let equipmentView = 'gantt';
+let ganttScale = 'month';
+let eqGanttScale = 'month';
+
+function setPersonnelView(v) {
+  personnelView = v;
+  document.getElementById('pvbtn-gantt').classList.toggle('active', v === 'gantt');
+  document.getElementById('pvbtn-table').classList.toggle('active', v === 'table');
+  document.getElementById('pvbtn-charts').classList.toggle('active', v === 'charts');
+  document.getElementById('personnel-gantt-view').style.display = v === 'gantt' ? '' : 'none';
+  document.getElementById('table-personnel').style.display = v === 'table' ? '' : 'none';
+  document.getElementById('charts-personnel').style.display = v === 'charts' ? '' : 'none';
+  if (v === 'gantt') renderGantt(state.personnel.filtered, 'personnel-gantt-view');
+}
+
+function setGanttScale(scale) {
+  ganttScale = scale;
+  renderGantt(state.personnel.filtered, 'personnel-gantt-view');
+}
+
+function setEquipmentView(v) {
+  equipmentView = v;
+  document.getElementById('evbtn-gantt').classList.toggle('active', v === 'gantt');
+  document.getElementById('evbtn-table').classList.toggle('active', v === 'table');
+  document.getElementById('evbtn-charts').classList.toggle('active', v === 'charts');
+  document.getElementById('equipment-gantt-view').style.display = v === 'gantt' ? '' : 'none';
+  document.getElementById('table-equipment').style.display = v === 'table' ? '' : 'none';
+  document.getElementById('charts-equipment').style.display = v === 'charts' ? '' : 'none';
+  if (v === 'gantt') renderEquipmentGantt();
+}
+
+function setEqGanttScale(scale) {
+  eqGanttScale = scale;
+  renderEquipmentGantt();
+}
+
+// ═══════════════════════ GANTT DRAG-RESIZE ═══════════════════════
+function makeBarResizable(bar, opts) {
+  // opts: { minDate, dayWidth, dayMs, totalDays, origStart, origEnd, assignmentId, table, gridInner, onSaved }
+  bar.classList.add('gantt-bar-resizable');
+
+  const handleL = document.createElement('div');
+  handleL.className = 'gantt-handle gantt-handle-left';
+  const handleR = document.createElement('div');
+  handleR.className = 'gantt-handle gantt-handle-right';
+  bar.appendChild(handleL);
+  bar.appendChild(handleR);
+
+  let dragging = false, side = null, startX = 0, origLeft = 0, origWidth = 0;
+  let ghost = null, currentPop = null;
+
+  function onDown(e, s) {
+    e.stopPropagation(); e.preventDefault();
+    dragging = true; side = s;
+    startX = e.clientX;
+    origLeft = parseFloat(bar.style.left);
+    origWidth = parseFloat(bar.style.width);
+    bar.classList.add('dragging');
+
+    // Ghost preview
+    ghost = document.createElement('div');
+    ghost.className = 'gantt-bar-ghost';
+    ghost.style.left = bar.style.left;
+    ghost.style.width = bar.style.width;
+    bar.parentElement.appendChild(ghost);
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }
+
+  handleL.addEventListener('mousedown', e => onDown(e, 'left'));
+  handleR.addEventListener('mousedown', e => onDown(e, 'right'));
+
+  function onMove(e) {
+    if (!dragging) return;
+    const dx = e.clientX - startX;
+    const daySnap = opts.dayWidth;
+
+    if (side === 'right') {
+      const newW = Math.max(daySnap, origWidth + Math.round(dx / daySnap) * daySnap);
+      ghost.style.width = newW + 'px';
+    } else {
+      const snappedDx = Math.round(dx / daySnap) * daySnap;
+      const newLeft = origLeft + snappedDx;
+      const newW = origWidth - snappedDx;
+      if (newW >= daySnap && newLeft >= 0) {
+        ghost.style.left = newLeft + 'px';
+        ghost.style.width = newW + 'px';
+      }
+    }
+  }
+
+  function onUp() {
+    if (!dragging) return;
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    dragging = false;
+    bar.classList.remove('dragging');
+
+    const newLeft = parseFloat(ghost.style.left);
+    const newWidth = parseFloat(ghost.style.width);
+    ghost.remove(); ghost = null;
+
+    // Calculate new dates
+    const newStartDay = Math.round(newLeft / opts.dayWidth);
+    const newEndDay = newStartDay + Math.round(newWidth / opts.dayWidth);
+    const newStart = new Date(opts.minDate.getTime() + newStartDay * opts.dayMs);
+    const newEnd = new Date(opts.minDate.getTime() + newEndDay * opts.dayMs);
+
+    // No change?
+    if (newStart.getTime() === opts.origStart.getTime() && newEnd.getTime() === opts.origEnd.getTime()) return;
+
+    // Show confirmation popover
+    showResizeConfirm(bar, opts, newStart, newEnd, newLeft, newWidth);
+  }
+}
+
+function showResizeConfirm(bar, opts, newStart, newEnd, newLeft, newWidth) {
+  // Remove any existing popover
+  document.querySelectorAll('.gantt-confirm-pop').forEach(p => p.remove());
+
+  const fmtD = d => d.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+  const startChanged = newStart.getTime() !== opts.origStart.getTime();
+  const endChanged = newEnd.getTime() !== opts.origEnd.getTime();
+  const durDays = Math.round((newEnd - newStart) / opts.dayMs);
+
+  const pop = document.createElement('div');
+  pop.className = 'gantt-confirm-pop';
+
+  // Position the popover near the bar
+  const barRect = bar.getBoundingClientRect();
+  const gridRect = opts.gridInner.getBoundingClientRect();
+  pop.style.left = (newLeft + newWidth / 2 - 110) + 'px';
+  pop.style.top = (parseFloat(bar.style.top) + 30) + 'px';
+
+  pop.innerHTML =
+    '<div class="pop-label">Update Dates (' + durDays + ' days)</div>' +
+    '<div class="pop-dates">' +
+      '<span class="' + (startChanged ? 'pop-changed' : '') + '">' + fmtD(newStart) + '</span>' +
+      '<span class="pop-arrow">&rarr;</span>' +
+      '<span class="' + (endChanged ? 'pop-changed' : '') + '">' + fmtD(newEnd) + '</span>' +
+    '</div>' +
+    '<div class="pop-actions">' +
+      '<button class="pop-btn pop-btn-cancel">Cancel</button>' +
+      '<button class="pop-btn pop-btn-save">Confirm</button>' +
+    '</div>';
+
+  bar.parentElement.appendChild(pop);
+
+  // Preview: temporarily move bar to new position
+  const prevLeft = bar.style.left, prevWidth = bar.style.width;
+  bar.style.left = newLeft + 'px';
+  bar.style.width = newWidth + 'px';
+  bar.style.outline = '2px solid var(--warning)';
+
+  function cleanup(revert) {
+    pop.remove();
+    if (revert) {
+      bar.style.left = prevLeft;
+      bar.style.width = prevWidth;
+    }
+    bar.style.outline = '';
+  }
+
+  pop.querySelector('.pop-btn-cancel').onclick = e => { e.stopPropagation(); cleanup(true); };
+  pop.querySelector('.pop-btn-save').onclick = async e => {
+    e.stopPropagation();
+    pop.querySelector('.pop-btn-save').textContent = 'Saving...';
+    pop.querySelector('.pop-btn-save').disabled = true;
+
+    const startStr = newStart.toISOString().slice(0, 10);
+    const endStr = newEnd.toISOString().slice(0, 10);
+
+    const updates = { start_date: startStr, end_date: endStr };
+    if (opts.table === 'personnel_assignments') updates.duration_days = durDays;
+    const { error } = await sb.from(opts.table).update(updates).eq('id', opts.assignmentId);
+
+    if (error) {
+      toast('Error updating dates: ' + error.message, 'error');
+      cleanup(true);
+    } else {
+      toast('Dates updated: ' + startStr + ' → ' + endStr, 'success');
+      cleanup(false);
+      if (opts.onSaved) opts.onSaved();
+    }
+  };
+
+  // Close on click outside
+  setTimeout(() => {
+    const outsideHandler = e => {
+      if (!pop.contains(e.target) && pop.parentElement) {
+        cleanup(true);
+        document.removeEventListener('mousedown', outsideHandler);
+      }
+    };
+    document.addEventListener('mousedown', outsideHandler);
+  }, 50);
+}
+
+function renderEquipmentGantt() {
+  const container = document.getElementById('equipment-gantt-view');
+  container.innerHTML = '';
+  const data = state.equipAssign.raw;
+
+  if (!data.length) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></div><div class="empty-title">No equipment assignments</div><div class="empty-desc">Import an Equipment Excel with Start/End dates to see the Gantt, or switch to Inventory view.</div></div>';
+    return;
+  }
+
+  // Group by equipment name
+  const equipMap = {};
+  data.forEach(r => {
+    const name = r.equipment_name || '(unnamed)';
+    if (!r.start_date) return;
+    const s = new Date(r.start_date);
+    const e = r.end_date ? new Date(r.end_date) : new Date(s.getTime() + 14 * 864e5);
+    if (isNaN(s.getTime()) || isNaN(e.getTime())) return;
+    if (!equipMap[name]) equipMap[name] = [];
+    equipMap[name].push({ id: r.id, start: s, end: e, client: r.client_name || '', install: r.installation_name || '', scope: r.scope || '', status: r.status || '', wo: r.work_order || '' });
+  });
+
+  const equipNames = Object.keys(equipMap).sort();
+  if (!equipNames.length) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-title">No valid date ranges</div></div>';
+    return;
+  }
+
+  let minDate = new Date(9999, 0), maxDate = new Date(0);
+  Object.values(equipMap).flat().forEach(t => { if (t.start < minDate) minDate = new Date(t.start); if (t.end > maxDate) maxDate = new Date(t.end); });
+
+  const dayMs = 864e5;
+  const scale = eqGanttScale;
+  const dayWidth = scale === 'day' ? 26 : scale === 'week' ? 22 : 18;
+  const rowH = 32;
+  const totalDays = Math.ceil((maxDate - minDate) / dayMs) + 2;
+
+  const wrap = document.createElement('div');
+  wrap.className = 'gantt-wrap';
+
+  // Toolbar
+  const toolbar = document.createElement('div');
+  toolbar.className = 'gantt-toolbar';
+  toolbar.innerHTML = '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">' +
+    '<div style="font-family:var(--font-mono);font-size:12px;font-weight:600">' + minDate.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) + ' — ' + maxDate.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) + '</div>' +
+    '<div style="display:flex;gap:4px">' +
+    '<button class="gantt-scale-btn'+(scale==='month'?' active':'')+'" onclick="setEqGanttScale(\'month\')">Month</button>' +
+    '<button class="gantt-scale-btn'+(scale==='week'?' active':'')+'" onclick="setEqGanttScale(\'week\')">Week</button>' +
+    '<button class="gantt-scale-btn'+(scale==='day'?' active':'')+'" onclick="setEqGanttScale(\'day\')">Day</button>' +
+    '</div></div><div style="font-size:11px;color:var(--text-2)">' + equipNames.length + ' equipment &bull; ' + data.length + ' assignments</div>';
+  wrap.appendChild(toolbar);
+
+  const gc = document.createElement('div');
+  gc.style.cssText = 'display:flex;overflow:hidden;max-height:500px';
+
+  const namesEl = document.createElement('div');
+  namesEl.style.cssText = 'width:260px;flex-shrink:0;border-right:1px solid var(--border);overflow-y:auto;background:var(--card)';
+
+  const gridEl = document.createElement('div');
+  gridEl.style.cssText = 'flex:1;overflow:auto;position:relative';
+  const inner = document.createElement('div');
+  inner.style.cssText = 'position:relative;min-width:100%;width:'+(totalDays*dayWidth)+'px';
+
+  // Header (reuse same logic as personnel gantt)
+  const cellStyle = 'font-size:10px;font-weight:600;color:var(--text-3);text-align:center;border-right:1px solid var(--border);padding:6px 0;flex-shrink:0';
+  if (scale === 'day') {
+    const hw = document.createElement('div');
+    hw.style.cssText = 'display:flex;flex-direction:column;border-bottom:2px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:5';
+    const mRow = document.createElement('div'); mRow.style.cssText = 'display:flex';
+    const dRow = document.createElement('div'); dRow.style.cssText = 'display:flex';
+    let cm = '', ms = 0;
+    for (let i = 0; i <= totalDays; i++) {
+      const dt = new Date(minDate.getTime() + i * dayMs);
+      const mo = i < totalDays ? dt.toLocaleDateString('en-GB',{month:'short',year:'numeric'}) : '';
+      if (mo !== cm) { if (cm && i > ms) { const c = document.createElement('div'); c.style.cssText = cellStyle+';width:'+((i-ms)*dayWidth)+'px;font-weight:700;border-bottom:1px solid var(--border)'; c.textContent = cm; mRow.appendChild(c); } cm = mo; ms = i; }
+      if (i < totalDays) { const dc = document.createElement('div'); const isWe = dt.getDay()===0||dt.getDay()===6; dc.style.cssText = cellStyle+';width:'+dayWidth+'px;font-size:9px'+(isWe?';color:var(--danger);opacity:0.7':''); dc.textContent = String(dt.getDate()); dRow.appendChild(dc); }
+    }
+    if (cm && totalDays > ms) { const c = document.createElement('div'); c.style.cssText = cellStyle+';width:'+((totalDays-ms)*dayWidth)+'px;font-weight:700;border-bottom:1px solid var(--border)'; c.textContent = cm; mRow.appendChild(c); }
+    hw.appendChild(mRow); hw.appendChild(dRow); inner.appendChild(hw);
+  } else {
+    const hEl = document.createElement('div');
+    hEl.style.cssText = 'display:flex;border-bottom:2px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:5';
+    let cl = '', cs = 0;
+    for (let i = 0; i <= totalDays; i++) {
+      const dt = new Date(minDate.getTime() + i * dayMs);
+      let lb; if (scale==='week') { const d=dt.getDay()||7; const th=new Date(dt);th.setDate(dt.getDate()+4-d); const wn=Math.ceil((((th-new Date(th.getFullYear(),0,1))/dayMs)+1)/7); lb='W'+wn; } else { lb=dt.toLocaleDateString('en-GB',{month:'short',year:'numeric'}); }
+      if (lb !== cl) { if (cl && i > cs) { const c=document.createElement('div'); c.style.cssText=cellStyle+';width:'+((i-cs)*dayWidth)+'px'; c.textContent=cl; hEl.appendChild(c); } cl=lb; cs=i; }
+    }
+    if (totalDays > cs) { const c=document.createElement('div'); c.style.cssText=cellStyle+';width:'+((totalDays-cs)*dayWidth)+'px'; c.textContent=cl; hEl.appendChild(c); }
+    inner.appendChild(hEl);
+  }
+
+  // Name header
+  const nh = document.createElement('div');
+  nh.style.cssText = 'height:'+rowH+'px;display:flex;align-items:center;padding:0 10px;font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;background:var(--bg);border-bottom:1px solid var(--border)';
+  nh.textContent = 'Equipment';
+  namesEl.appendChild(nh);
+
+  // Rows
+  equipNames.forEach(eqName => {
+    const tasks = equipMap[eqName];
+    const nameRow = document.createElement('div');
+    nameRow.style.cssText = 'height:'+rowH+'px;display:flex;align-items:center;padding:0 10px;font-size:11.5px;font-weight:600;color:var(--text);border-bottom:1px solid var(--border);white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+    nameRow.textContent = eqName;
+    nameRow.title = eqName;
+    namesEl.appendChild(nameRow);
+
+    const gridRow = document.createElement('div');
+    gridRow.style.cssText = 'height:'+rowH+'px;border-bottom:1px solid var(--border);position:relative';
+    tasks.forEach(t => {
+      const off = Math.max(0, (t.start - minDate) / dayMs);
+      const dur = Math.max(1, (t.end - t.start) / dayMs);
+      const bar = document.createElement('div');
+      bar.style.cssText = 'position:absolute;height:22px;top:5px;border-radius:5px;min-width:4px;display:flex;align-items:center;padding:0 6px;font-size:9px;font-weight:600;color:#fff;overflow:hidden;white-space:nowrap;z-index:2;cursor:pointer;left:'+(off*dayWidth)+'px;width:'+(dur*dayWidth)+'px;background:'+getStatusColor(t.status);
+      bar.textContent = t.client + (t.scope ? ' - ' + t.scope : '');
+      bar.title = eqName + '\n' + (t.client||'(no client)') + (t.scope ? '\nScope: ' + t.scope : '') + '\n' + (t.install||'') + (t.wo ? '\nWO: ' + t.wo : '') + '\n' + t.start.toLocaleDateString('en-GB') + ' → ' + t.end.toLocaleDateString('en-GB') + '\n' + t.status;
+      gridRow.appendChild(bar);
+      if (t.id) makeBarResizable(bar, { minDate, dayWidth, dayMs, totalDays, origStart: t.start, origEnd: t.end, assignmentId: t.id, table: 'equipment_assignments', gridInner: inner, onSaved: () => loadEquipmentAssignments().then(() => renderEquipmentGantt()) });
+    });
+    inner.appendChild(gridRow);
+  });
+
+  // Today line
+  const today = new Date();
+  if (today >= minDate && today <= maxDate) {
+    const todayOff = (today - minDate) / dayMs;
+    const tl = document.createElement('div');
+    tl.style.cssText = 'position:absolute;width:2px;background:var(--danger);z-index:4;pointer-events:none;left:'+(todayOff*dayWidth)+'px;top:0;bottom:0';
+    const tlLabel = document.createElement('div');
+    tlLabel.style.cssText = 'position:absolute;top:-16px;left:50%;transform:translateX(-50%);font-size:9px;font-weight:700;color:var(--danger);white-space:nowrap';
+    tlLabel.textContent = 'Today';
+    tl.appendChild(tlLabel);
+    inner.appendChild(tl);
+  }
+
+  gridEl.appendChild(inner);
+  gc.appendChild(namesEl);
+  gc.appendChild(gridEl);
+  wrap.appendChild(gc);
+  namesEl.addEventListener('scroll', () => { gridEl.scrollTop = namesEl.scrollTop; });
+  gridEl.addEventListener('scroll', () => { namesEl.scrollTop = gridEl.scrollTop; });
+  container.appendChild(wrap);
+  if (today >= minDate && today <= maxDate) {
+    const todayOff = (today - minDate) / dayMs * dayWidth;
+    gridEl.scrollLeft = Math.max(0, todayOff - gridEl.clientWidth / 2);
+  }
+}
+
+function renderGantt(data, containerId) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = '';
+
+  // Build tech map from Supabase data
+  const techMap = {};
+  data.forEach(r => {
+    const name = r.technician_name;
+    if (!name || !r.start_date) return;
+    const s = new Date(r.start_date);
+    const e = r.end_date ? new Date(r.end_date) : new Date(s.getTime() + (r.duration_days || 14) * 864e5);
+    if (isNaN(s.getTime()) || isNaN(e.getTime())) return;
+    if (!techMap[name]) techMap[name] = [];
+    techMap[name].push({ id: r.id, start: s, end: e, client: r.client_name || '', install: r.installation_name || '', scope: r.scope || '', status: r.status || '' });
+  });
+
+  const techNames = Object.keys(techMap).sort();
+  if (!techNames.length) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="4" rx="1"/><rect x="3" y="10" width="12" height="4" rx="1"/><rect x="3" y="16" width="15" height="4" rx="1"/></svg></div><div class="empty-title">No Gantt data</div><div class="empty-desc">No valid date ranges found.</div></div>';
+    return;
+  }
+
+  let minDate = new Date(9999, 0), maxDate = new Date(0);
+  Object.values(techMap).flat().forEach(t => { if (t.start < minDate) minDate = new Date(t.start); if (t.end > maxDate) maxDate = new Date(t.end); });
+
+  const dayMs = 864e5;
+  const dayWidth = ganttScale === 'day' ? 26 : ganttScale === 'week' ? 22 : 18;
+  const rowH = 32;
+  const totalDays = Math.ceil((maxDate - minDate) / dayMs) + 2;
+
+  const expanded = {};
+  techNames.forEach((_, i) => expanded[i] = true);
+
+  const wrap = document.createElement('div');
+  wrap.className = 'gantt-wrap';
+
+  // Toolbar
+  const toolbar = document.createElement('div');
+  toolbar.className = 'gantt-toolbar';
+  toolbar.innerHTML = '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">' +
+    '<div class="gantt-range" style="font-family:var(--font-mono);font-size:12px">' + minDate.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) + ' — ' + maxDate.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) + '</div>' +
+    '<div class="gantt-scale" style="display:flex;gap:4px">' +
+    '<button class="gantt-scale-btn'+(ganttScale==='month'?' active':'')+'" onclick="setGanttScale(\'month\')">Month</button>' +
+    '<button class="gantt-scale-btn'+(ganttScale==='week'?' active':'')+'" onclick="setGanttScale(\'week\')">Week</button>' +
+    '<button class="gantt-scale-btn'+(ganttScale==='day'?' active':'')+'" onclick="setGanttScale(\'day\')">Day</button>' +
+    '</div></div><div style="font-size:11px;color:var(--text-2)">' + techNames.length + ' technicians &bull; ' + data.length + ' assignments</div>';
+  wrap.appendChild(toolbar);
+
+  // Legend
+  const legendStatuses = [...new Set(Object.values(techMap).flat().map(t => t.status))].filter(Boolean);
+  const legend = document.createElement('div');
+  legend.className = 'gantt-legend';
+  legend.style.cssText = 'display:flex;flex-wrap:wrap;gap:12px;padding:10px 20px;border-bottom:1px solid var(--border);font-size:11px';
+  legendStatuses.forEach(st => {
+    legend.innerHTML += '<div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;border-radius:3px;background:'+getStatusColor(st)+'"></div>'+esc(st)+'</div>';
+  });
+  legend.innerHTML += '<div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;border-radius:3px;background:#7AB800"></div>Available</div>';
+  wrap.appendChild(legend);
+
+  // Container
+  const gc = document.createElement('div');
+  gc.className = 'gantt-container';
+  gc.style.cssText = 'display:flex;overflow:hidden;max-height:500px';
+
+  // Names panel
+  const namesEl = document.createElement('div');
+  namesEl.className = 'gantt-names';
+  namesEl.style.cssText = 'width:240px;flex-shrink:0;border-right:1px solid var(--border);overflow-y:auto;background:var(--card)';
+
+  // Grid panel
+  const gridEl = document.createElement('div');
+  gridEl.className = 'gantt-grid';
+  gridEl.style.cssText = 'flex:1;overflow:auto;position:relative';
+  const inner = document.createElement('div');
+  inner.style.cssText = 'position:relative;min-width:100%;width:'+(totalDays*dayWidth)+'px';
+
+  // Header
+  const cellStyle = 'font-size:10px;font-weight:600;color:var(--text-3);text-align:center;border-right:1px solid var(--border);padding:6px 0;flex-shrink:0';
+
+  if (ganttScale === 'day') {
+    // Dual-row header: months on top, day numbers below
+    const headerWrap = document.createElement('div');
+    headerWrap.style.cssText = 'display:flex;flex-direction:column;border-bottom:2px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:5';
+
+    const monthRow = document.createElement('div');
+    monthRow.style.cssText = 'display:flex';
+    const dayRow = document.createElement('div');
+    dayRow.style.cssText = 'display:flex';
+
+    let curMonth = '', monthStart = 0;
+    for (let i = 0; i <= totalDays; i++) {
+      const dt = new Date(minDate.getTime() + i * dayMs);
+      const mo = i < totalDays ? dt.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }) : '';
+      if (mo !== curMonth) {
+        if (curMonth && i > monthStart) {
+          const cell = document.createElement('div');
+          cell.style.cssText = cellStyle + ';width:'+((i-monthStart)*dayWidth)+'px;font-weight:700;border-bottom:1px solid var(--border)';
+          cell.textContent = curMonth;
+          monthRow.appendChild(cell);
+        }
+        curMonth = mo; monthStart = i;
+      }
+      if (i < totalDays) {
+        const dayCell = document.createElement('div');
+        const isWeekend = dt.getDay() === 0 || dt.getDay() === 6;
+        dayCell.style.cssText = cellStyle + ';width:'+dayWidth+'px;font-size:9px' + (isWeekend ? ';color:var(--danger);opacity:0.7' : '');
+        dayCell.textContent = String(dt.getDate());
+        dayRow.appendChild(dayCell);
+      }
+    }
+    if (curMonth && totalDays > monthStart) {
+      const cell = document.createElement('div');
+      cell.style.cssText = cellStyle + ';width:'+((totalDays-monthStart)*dayWidth)+'px;font-weight:700;border-bottom:1px solid var(--border)';
+      cell.textContent = curMonth;
+      monthRow.appendChild(cell);
+    }
+
+    headerWrap.appendChild(monthRow);
+    headerWrap.appendChild(dayRow);
+    inner.appendChild(headerWrap);
+  } else {
+    // Single-row header for month/week scale
+    const headerEl = document.createElement('div');
+    headerEl.style.cssText = 'display:flex;border-bottom:2px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:5';
+    let curLabel = '', cellStart = 0;
+    for (let i = 0; i <= totalDays; i++) {
+      const dt = new Date(minDate.getTime() + i * dayMs);
+      let label;
+      if (ganttScale === 'week') {
+        const d = dt.getDay() || 7;
+        const thu = new Date(dt); thu.setDate(dt.getDate() + 4 - d);
+        const wn = Math.ceil((((thu - new Date(thu.getFullYear(),0,1)) / dayMs) + 1) / 7);
+        label = 'W' + wn;
+      } else {
+        label = dt.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
+      }
+      if (label !== curLabel) {
+        if (curLabel && i > cellStart) {
+          const cell = document.createElement('div');
+          cell.style.cssText = cellStyle + ';width:'+((i-cellStart)*dayWidth)+'px';
+          cell.textContent = curLabel;
+          headerEl.appendChild(cell);
+        }
+        curLabel = label; cellStart = i;
+      }
+    }
+    if (totalDays > cellStart) {
+      const cell = document.createElement('div');
+      cell.style.cssText = cellStyle + ';width:'+((totalDays-cellStart)*dayWidth)+'px';
+      cell.textContent = curLabel;
+      headerEl.appendChild(cell);
+    }
+    inner.appendChild(headerEl);
+  }
+
+  // Name header
+  const nameHeader = document.createElement('div');
+  nameHeader.style.cssText = 'height:'+rowH+'px;display:flex;align-items:center;padding:0 10px;font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;background:var(--bg);border-bottom:1px solid var(--border)';
+  nameHeader.textContent = 'Technician';
+  namesEl.appendChild(nameHeader);
+
+  // Rows
+  techNames.forEach((techName, ti) => {
+    const tasks = techMap[techName];
+
+    // Name row
+    const nameRow = document.createElement('div');
+    nameRow.style.cssText = 'height:'+rowH+'px;display:flex;align-items:center;gap:4px;padding:0 8px;font-size:12px;font-weight:700;color:var(--text);border-bottom:1px solid var(--border);background:var(--bg-2);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+    nameRow.innerHTML = '<span style="width:16px;flex-shrink:0;font-size:10px;text-align:center" id="gantt-toggle-'+ti+'">▼</span><span style="overflow:hidden;text-overflow:ellipsis" title="'+esc(techName)+'">'+esc(techName)+'</span>';
+    nameRow.onclick = () => {
+      expanded[ti] = !expanded[ti];
+      document.getElementById('gantt-toggle-'+ti).textContent = expanded[ti] ? '▼' : '▶';
+      wrap.querySelectorAll('[data-gantt-parent="'+ti+'"]').forEach(el => el.style.display = expanded[ti] ? '' : 'none');
+    };
+    namesEl.appendChild(nameRow);
+
+    // Grid row (tech level - shows available gaps)
+    const gridRow = document.createElement('div');
+    gridRow.style.cssText = 'height:'+rowH+'px;border-bottom:1px solid var(--border);position:relative';
+
+    // Available gaps
+    const covered = new Array(totalDays).fill(false);
+    tasks.forEach(t => {
+      let a = Math.floor((t.start - minDate) / dayMs);
+      let b = Math.ceil((t.end - minDate) / dayMs);
+      for (let i = Math.max(0, a); i < Math.min(totalDays, b); i++) covered[i] = true;
+    });
+    for (let i = 0; i < totalDays; i++) {
+      if (covered[i]) continue;
+      let j = i;
+      while (j < totalDays && !covered[j]) j++;
+      const bar = document.createElement('div');
+      bar.style.cssText = 'position:absolute;height:22px;top:5px;border-radius:5px;min-width:4px;display:flex;align-items:center;padding:0 6px;font-size:9px;font-weight:600;overflow:hidden;white-space:nowrap;background:#7AB800;color:#0b1220;left:'+(i*dayWidth)+'px;width:'+((j-i)*dayWidth)+'px';
+      bar.textContent = 'Available';
+      bar.title = techName + '\nAvailable\n' + new Date(minDate.getTime()+i*dayMs).toLocaleDateString('en-GB') + ' → ' + new Date(minDate.getTime()+(j-1)*dayMs).toLocaleDateString('en-GB');
+      gridRow.appendChild(bar);
+      i = j - 1;
+    }
+
+    // Assignment bars
+    tasks.forEach(t => {
+      const off = Math.max(0, (t.start - minDate) / dayMs);
+      const dur = Math.max(1, (t.end - t.start) / dayMs);
+      const bar = document.createElement('div');
+      bar.style.cssText = 'position:absolute;height:22px;top:5px;border-radius:5px;min-width:4px;display:flex;align-items:center;padding:0 6px;font-size:9px;font-weight:600;color:#fff;overflow:hidden;white-space:nowrap;z-index:2;cursor:pointer;left:'+(off*dayWidth)+'px;width:'+(dur*dayWidth)+'px;background:'+getStatusColor(t.status);
+      bar.textContent = t.client ? t.client + (t.scope ? ' - ' + t.scope : '') : t.install;
+      bar.title = techName + '\n' + (t.client||'(no client)') + (t.scope ? '\nScope: ' + t.scope : '') + '\n' + (t.install||'') + '\n' + t.start.toLocaleDateString('en-GB') + ' → ' + t.end.toLocaleDateString('en-GB') + '\n' + t.status;
+      gridRow.appendChild(bar);
+      if (t.id) makeBarResizable(bar, { minDate, dayWidth, dayMs, totalDays, origStart: t.start, origEnd: t.end, assignmentId: t.id, table: 'personnel_assignments', gridInner: inner, onSaved: () => loadPersonnel() });
+    });
+
+    inner.appendChild(gridRow);
+
+    // Sub-rows per client
+    const byClient = {};
+    tasks.forEach(t => { const c = t.client || '(no client)'; if (!byClient[c]) byClient[c] = []; byClient[c].push(t); });
+    Object.entries(byClient).sort().forEach(([client, clientTasks]) => {
+      const subName = document.createElement('div');
+      subName.dataset.ganttParent = ti;
+      subName.style.cssText = 'height:'+rowH+'px;display:flex;align-items:center;padding:0 8px 0 28px;font-size:11px;font-weight:500;color:var(--text-2);border-bottom:1px solid var(--border);white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+      subName.textContent = client;
+      namesEl.appendChild(subName);
+
+      const subGrid = document.createElement('div');
+      subGrid.dataset.ganttParent = ti;
+      subGrid.style.cssText = 'height:'+rowH+'px;border-bottom:1px solid var(--border);position:relative';
+      clientTasks.forEach(t => {
+        const off = Math.max(0, (t.start - minDate) / dayMs);
+        const dur = Math.max(1, (t.end - t.start) / dayMs);
+        const bar = document.createElement('div');
+        bar.style.cssText = 'position:absolute;height:22px;top:5px;border-radius:5px;min-width:4px;display:flex;align-items:center;padding:0 6px;font-size:9px;font-weight:600;color:#fff;overflow:hidden;white-space:nowrap;z-index:2;left:'+(off*dayWidth)+'px;width:'+(dur*dayWidth)+'px;background:'+getStatusColor(t.status);
+        bar.textContent = t.scope || t.install;
+        bar.title = techName + '\n' + client + (t.scope ? '\nScope: ' + t.scope : '') + '\n' + (t.install||'') + '\n' + t.start.toLocaleDateString('en-GB') + ' → ' + t.end.toLocaleDateString('en-GB') + '\n' + t.status;
+        subGrid.appendChild(bar);
+        if (t.id) makeBarResizable(bar, { minDate, dayWidth, dayMs, totalDays, origStart: t.start, origEnd: t.end, assignmentId: t.id, table: 'personnel_assignments', gridInner: inner, onSaved: () => loadPersonnel() });
+      });
+      inner.appendChild(subGrid);
+    });
+  });
+
+  // Today line
+  const today = new Date();
+  if (today >= minDate && today <= maxDate) {
+    const todayOff = (today - minDate) / dayMs;
+    const todayLine = document.createElement('div');
+    todayLine.style.cssText = 'position:absolute;width:2px;background:var(--danger);z-index:4;pointer-events:none;left:'+(todayOff*dayWidth)+'px;top:0;bottom:0';
+    const todayLabel = document.createElement('div');
+    todayLabel.style.cssText = 'position:absolute;top:-16px;left:50%;transform:translateX(-50%);font-size:9px;font-weight:700;color:var(--danger);white-space:nowrap';
+    todayLabel.textContent = 'Today';
+    todayLine.appendChild(todayLabel);
+    inner.appendChild(todayLine);
+  }
+
+  gridEl.appendChild(inner);
+  gc.appendChild(namesEl);
+  gc.appendChild(gridEl);
+  wrap.appendChild(gc);
+
+  // Sync scroll
+  namesEl.addEventListener('scroll', () => { gridEl.scrollTop = namesEl.scrollTop; });
+  gridEl.addEventListener('scroll', () => { namesEl.scrollTop = gridEl.scrollTop; });
+
+  container.appendChild(wrap);
+
+  // Scroll to today
+  if (today >= minDate && today <= maxDate) {
+    const todayOff = (today - minDate) / dayMs * dayWidth;
+    gridEl.scrollLeft = Math.max(0, todayOff - gridEl.clientWidth / 2);
+  }
+}
+
+// ─── Close modals on overlay click ───
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('open'); });
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  AUTH — Login / Logout / Session guard
+// ═══════════════════════════════════════════════════════════════
+
+function showLoginScreen() {
+  document.getElementById('login-screen').classList.remove('hidden');
+  document.getElementById('dashboard-wrap').classList.add('hidden');
+  // Clear form & error state
+  document.getElementById('login-form').reset();
+  hideLoginError();
+  // Re-enable button in case it was left disabled
+  const btn = document.getElementById('login-btn');
+  btn.disabled = false;
+  btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>Sign In';
+}
+
+function showDashboard(user) {
+  document.getElementById('login-screen').classList.add('hidden');
+  document.getElementById('dashboard-wrap').classList.remove('hidden');
+  // Show user info in topbar
+  const email = user.email || '';
+  const initial = email.charAt(0).toUpperCase() || '?';
+  document.getElementById('user-avatar').textContent = initial;
+  document.getElementById('user-email-display').textContent = email;
+  document.getElementById('user-pill').style.display = 'flex';
+}
+
+function showLoginError(msg) {
+  const el = document.getElementById('login-error');
+  document.getElementById('login-error-msg').textContent = msg;
+  el.classList.add('visible');
+}
+
+function hideLoginError() {
+  document.getElementById('login-error').classList.remove('visible');
+}
+
+async function handleLogin(e) {
+  e.preventDefault();
+  hideLoginError();
+
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+
+  const btn = document.getElementById('login-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner" style="width:16px;height:16px;border-width:2px;border-top-color:#fff;border-color:rgba(255,255,255,0.3)"></div>Signing in...';
+
+  const { data, error } = await sb.auth.signInWithPassword({ email, password });
+
+  if (error) {
+    showLoginError(error.message || 'Invalid email or password.');
+    btn.disabled = false;
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>Sign In';
+    return false;
+  }
+
+  // onAuthStateChange will handle the UI transition
+  return false;
+}
+
+async function handleLogout() {
+  await sb.auth.signOut();
+  // onAuthStateChange will handle the UI transition
+}
+
+// ─── INIT ───
+document.addEventListener('DOMContentLoaded', async function() {
+  // Check existing session first (avoids flash)
+  const { data: { session } } = await sb.auth.getSession();
+
+  if (session && session.user) {
+    showDashboard(session.user);
+    updateTopActions();
+    try {
+      await loadLookups();
+      await Promise.all([loadPersonnel(), loadEquipment(), loadEquipmentAssignments(), loadQuotes(), loadProjects()]);
+      toast('Connected to Supabase — data loaded', 'success');
+    } catch (err) {
+      toast('Connection error: ' + err.message, 'error');
+    }
+  } else {
+    showLoginScreen();
+  }
+
+  // Listen for ongoing auth state changes (login / logout / token refresh)
+  sb.auth.onAuthStateChange(async (event, session) => {
+    if (event === 'SIGNED_IN' && session && session.user) {
+      showDashboard(session.user);
+      updateTopActions();
+      try {
+        await loadLookups();
+        await Promise.all([loadPersonnel(), loadEquipment(), loadEquipmentAssignments(), loadQuotes(), loadProjects()]);
+        toast('Welcome back, ' + session.user.email, 'success');
+      } catch (err) {
+        toast('Connection error: ' + err.message, 'error');
+      }
+    } else if (event === 'SIGNED_OUT') {
+      // Hide user pill
+      document.getElementById('user-pill').style.display = 'none';
+      showLoginScreen();
+    }
+  });
+});
+</script>
+
+</div><!-- end .dashboard-wrap -->
+</body>
+</html>
