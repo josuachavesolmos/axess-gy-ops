@@ -66,7 +66,9 @@ under key `axess-theme`. Charts re-themed via `updateChartsTheme()` when toggled
 <aside.sidebar>            ← 5 tabs (role=tablist), brand, theme/collapse footer
 <div.main>
   <div.mobile-nav>         ← duplicate tab buttons for ≤900 px
-  <div.topbar>             ← title + 3 upload pills (Operations · Quote Log · Leads) + Export button
+  <div.topbar>             ← title + 3 upload pills (Operations · Quote Log · Leads) + Export + "Ask AI" + user-chip
+<aside.ai-sidebar>         ← slide-in right panel (Ask AI) with Today's Highlights + chat
+<div.ai-sidebar-overlay>   ← backdrop while sidebar open
   <div.content>
     <div.tab-panel#panel-quote     class="active">
     <div.tab-panel#panel-personnel>
@@ -153,6 +155,16 @@ where `type` is `'operations'`, `'quote'`, or `'leads'`:
    plain `loaded successfully` for single. Each loaded tab is re-rendered via
    `loaded.forEach(t => renderTab(t))` — this is what makes Operations refresh
    3 panels at once.
+5. **Auto-push to D1 (since 2026-05-15)**: for each loaded dataset,
+   `AxessAuth.pushDataset(type, filename, rows)` fires `POST /data/import` to
+   the Worker (fire-and-forget). The Worker creates an `import_batches` row
+   and bulk-inserts the parsed rows. Per-dataset success/error toasts show
+   independently of the local render. See §13 for the full D1 architecture.
+
+On dashboard boot, **`hydrateFromD1()`** runs right after `requireAuth()` +
+`checkLicense()` and before `generateDemoData()`. For every dataset that has
+a stored batch, it overrides the demo seed with the server snapshot — so a
+fresh browser sees the last uploaded data without re-uploading the Excel.
 
 Parsers (each finds its own sheet, never relies on `SheetNames[0]` blindly):
 - `processQuote(wb)` — uses `findQuoteSheet()` (first sheet containing `quote`, else `SheetNames[0]`).
@@ -504,3 +516,219 @@ eae2ae4  Drill-down on Revenue vs Cost over Time chart
 | `imagen (1).jpeg`, `9723582.jpg`, `9723568.psd` | Brand assets |
 
 If a template is updated, **diff its first-row headers against §6 before merging**.
+
+---
+
+## 13. D1 persistence (server-side snapshots)
+
+As of 2026-05-15, every Excel uploaded through the dashboard is also persisted
+to **Cloudflare D1** (SQLite) so a fresh browser hydrates from the server
+without re-uploading. Demo seed is still the fallback when no snapshot exists.
+
+### 13.1 Architecture
+
+```
+Dashboard upload
+  │
+  ├─ Parse Excel locally (SheetJS)         ← unchanged
+  ├─ Render tab(s)                          ← unchanged
+  └─ Fire-and-forget POST /data/import      ← NEW
+       │
+       ▼
+  Cloudflare Worker (JWT-gated)
+       │
+       ├─ Validate JWT
+       ├─ Create row in `import_batches`
+       └─ Bulk insert mapped rows into the dataset table
+              │
+              ▼
+        Cloudflare D1 (database `axess-gy`)
+```
+
+On dashboard boot (`DOMContentLoaded`), after `requireAuth()` and
+`checkLicense()`, `hydrateFromD1()` calls `/data/snapshot?dataset=<x>` for
+each of the 5 datasets and overrides the demo seed if rows are returned.
+Loaded dots in the topbar pills flip to `loaded` for hydrated datasets.
+
+### 13.2 Database `axess-gy`
+
+- Created via `wrangler d1 create axess-gy` (id `de63b97f-754c-...`).
+- Bound to the Worker as `env.DB` (see `wrangler.toml`).
+- 6 tables + 5 `v_<dataset>_current` views (return rows belonging to the
+  latest batch only — atomic snapshot semantics).
+
+| Table | Purpose | Key columns |
+|---|---|---|
+| `import_batches` | One row per upload (audit) | `id`, `dataset`, `filename`, `row_count`, `imported_by`, `imported_at` |
+| `master_projects` | Work Orders + Master sheet | `workorder`, `client`, `po_value`, `status`, `period`, `start_date`/`end_date`, **`qa_000`…`qa_900`** (10 cols), `comment`, `invoicing_status`, `import_batch_id` |
+| `personnel_assignments` | Planner sheet | `technician_name`, `competency`, `start_date`/`end_date`, `installation`, `client`, `status`, `work_order`, `support_classification`, `scope` |
+| `equipment_assignments` | Equipment planner + Lists join | `description`, `start_date`/`end_date`, `installation`, `client`, `status`, `work_order`, `scope`, `calibration_due_date` |
+| `quotes` | Order Backlog | 41 columns mirroring the Quote Log Excel + `external_id` |
+| `leads` | Sales activity | 19 columns mirroring the Leads Power Query feed |
+
+All non-PK columns are nullable (migration 002 dropped `NOT NULL` after a
+real upload hit silent rollbacks — see §13.5).
+
+### 13.3 Worker endpoints (`/data/*`, all JWT-gated)
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/data/import` | `{ dataset, filename, rows[] }` → creates a batch + bulk-inserts. Returns `{ batch_id, row_count }`. |
+| `GET`  | `/data/snapshot?dataset=<x>` | Returns `{ batch, rows[] }` from `v_<x>_current` (client-shape JSON via `toClient`). |
+| `GET`  | `/data/history?dataset=<x>` | Last 50 batches (filter optional). |
+| `DELETE` | `/data/batch/:id` | **Admin role required**. Cascades to all child rows. |
+
+The Worker uses **dataset mappers** (`DATASET_MAPPERS` in `src/index.js`)
+that declare Excel-key ↔ DB-column mappings with per-column normalizers
+(`normalizeText`, `normalizeNum`, `normalizeInt`, `normalizeDate`,
+`normalizeDateTime`). Same list drives both `toDB(row)` and
+`toClient(dbRow)`.
+
+### 13.4 Bulk-insert mechanics
+
+`bulkInsert(db, tableName, columns, rows)` (in `src/index.js`):
+1. Computes `rowsPerStmt = floor(95 / columns.length)` to respect D1's
+   ~100 bind-param cap per statement.
+2. Generates multi-row `INSERT ... VALUES (...), (...), ...` statements.
+3. Groups statements in chunks of 50 and submits via `db.batch()` for
+   atomic, fewer round-trips.
+
+For master (29 cols → 3 rows/stmt × 76 stmts) and leads (20 cols → 4 × 901)
+the worst case stays well under D1's free-tier daily write quota.
+
+### 13.5 Migrations
+
+| File | What | When |
+|---|---|---|
+| `migrations/001_initial.sql` | All 6 tables + 5 views + indexes. Idempotent (drops + recreates). | 2026-05-15 setup |
+| `migrations/002_relax_nulls.sql` | Drops `NOT NULL` from `start_date`, `technician_name`, `description`, `workorder`. SQLite can't `ALTER … DROP NOT NULL`, so the migration recreates the three affected tables + views, preserving data. | 2026-05-15 — found that real Excel rows with empty dates caused the entire bulk insert to rollback, leaving `import_batches.row_count > 0` but the target table empty. |
+
+Apply remotely:
+```bash
+npx wrangler d1 execute axess-gy --remote --file=migrations/00X_<name>.sql
+```
+
+### 13.6 Gotchas
+
+- **D1 bind() cap (~100 params)** — `bulkInsert` computes `rowsPerStmt`
+  dynamically. Don't hardcode without checking column count.
+- **`NOT NULL` is a footgun** — Excel uploads frequently have empty fields.
+  Default to nullable; let the dashboard handle missing values at render.
+- **Views always return latest batch** — uploading the same dataset twice
+  hides the older batch automatically. Use `/data/history` + `/data/batch/:id`
+  DELETE if you need to roll back.
+- **`return await` in routing** — the Worker's `fetch()` try/catch only
+  catches handler rejections when calls are awaited. `return foo()` (without
+  await) lets HttpError bubble out as raw 1101 with no CORS headers. All
+  routes use `return await handler(...)`.
+
+---
+
+## 14. AI Assistant (Claude Haiku)
+
+As of 2026-05-15, the topbar has an **Ask AI** pill that opens a slide-in
+right sidebar. The assistant uses **Claude Haiku 4.5** through Anthropic's
+Messages API, with the Worker as proxy.
+
+### 14.1 Endpoints
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/assistant/insights` | Auto-load on sidebar open. Returns `{ highlights: [{severity, icon, title, detail}], usage, quota }`. 3-5 actionable highlights generated from D1 aggregates. |
+| `POST` | `/assistant/ask` | `{ question }` → returns `{ answer, model, usage, quota }`. 1-3 sentence answer constrained to dashboard data. |
+
+Both JWT-gated and rate-limited (see §14.4).
+
+### 14.2 Context building (`buildAssistantContext`)
+
+Runs **17 SQL aggregates** in parallel (`Promise.all`) against the
+`v_<dataset>_current` views:
+
+- **master:** total, PO value, invoiced, avg CMR, **QA compliance % +
+  WOs with at least one "Not completed" step**, overdue (`end_date < today`
+  AND status not closed), status breakdown, top 5 clients by PO, 5 sample
+  red WOs.
+- **personnel:** total assignments, distinct techs, by-status, top 5 techs.
+- **equipment:** total, calibration expired / expiring 30d / ok, 8 nearest
+  to expiration.
+- **quote:** total, total revenue + cost, by-status with revenue.
+- **leads:** total, by-status, top 5 responsibles.
+
+Total context ≈ 900-1100 input tokens.
+
+### 14.3 Prompts
+
+Constants in `src/index.js`:
+
+- **`SYSTEM_ASK`** — "Use ONLY JSON CONTEXT, 1-3 sentences, never invent
+  numbers, match user language (ES/EN), quote identifiers verbatim, for
+  'action items' point to specific records with one short reason each."
+- **`SYSTEM_INSIGHTS`** — "Output ONLY a JSON array of `{severity, icon,
+  title, detail}` objects, 3-5 items, priorities: calibrations → QA
+  Not completed → overdue WOs → stale quotes → high-PO low-invoice clients.
+  Default language Spanish."
+
+Anthropic model pinned: `claude-haiku-4-5-20251001`.
+
+### 14.4 Rate limiting
+
+Tracked per user in KV `USERS` (same namespace as auth — saves a binding):
+- Key: `ratelimit:ai:<username>:<YYYY-MM-DD>`
+- TTL: 36h (covers timezone edges)
+- Max: 50 calls/day (`RATE_LIMIT_DAILY` constant)
+
+On hit, the Worker throws `HttpError(429, 'Daily AI quota reached...')`.
+The dashboard surfaces it as a non-blocking error bubble in the chat,
+plus the footer `<N> / 50 AI queries today`.
+
+### 14.5 UI surface (`dashboard.html`)
+
+- **`.ai-btn`** — gradient pill in topbar, pulse-dot indicator.
+- **`.ai-sidebar`** — 420px slide-in panel + backdrop overlay.
+- **`.ai-insights-section`** — Today's Highlights, severity-coloured
+  cards (`high`=red, `medium`=amber, `low`=green). Loaded on first
+  sidebar open; cached for the session (`_aiInsightsLoaded` flag).
+- **`.ai-chat-area`** — message bubbles with user/assistant/error roles
+  and a typing indicator.
+- **`.ai-suggestions`** — 4 starter question chips for one-tap asks.
+- **`.ai-input`** — textarea, Enter to submit, Shift+Enter for newline.
+
+JS module-level globals in `dashboard.html`:
+`_aiInsightsLoaded`, `_aiSending`, `_aiHistory` (in-memory; clears on reload).
+
+`auth.js` exposes `AxessAuth.askAssistant(question)` and
+`AxessAuth.fetchInsights()`.
+
+### 14.6 Cost (real measurements)
+
+| Endpoint | Input | Output | $/call |
+|---|---|---|---|
+| `/assistant/insights` | ~930 tokens | ~310 tokens | ~$0.0019 |
+| `/assistant/ask` | ~940 tokens | ~80 tokens | ~$0.0014 |
+
+Worst-case daily: 50 × $0.0019 = $0.095/user. Two users at full quota
+≈ **$5.70/month**. Realistic use (~10 queries/user/day) ≈ **$1-2/month**.
+
+### 14.7 Secrets
+
+- `ANTHROPIC_API_KEY` — set via `wrangler secret put`. Required.
+  Without it, `/assistant/*` returns 500 `ANTHROPIC_API_KEY not configured`
+  (caught by the dashboard, shown as an inline error bubble).
+- The API key is **rotated independently** from JWT_SECRET. Rotating the
+  Anthropic key has no effect on existing user sessions.
+
+### 14.8 Gotchas
+
+- **No conversation memory server-side** — the Worker is stateless. If you
+  later want multi-turn context, pass `history[]` in the request body and
+  include it in the Messages API call.
+- **Claude returns JSON sometimes wrapped in markdown fences** — for
+  `/assistant/insights`, the Worker extracts the JSON array via regex
+  (`text.match(/\[[\s\S]*\]/)`) before parsing. Don't strip the regex
+  fallback even if newer Haiku versions stop fencing.
+- **Quota counter is local-day in UTC** — at midnight UTC, the counter
+  resets. Users in Guyana (UTC-4) see the reset at 20:00 local time.
+- **Don't include row-level data in the context** unless strictly necessary
+  — context tokens dominate cost. Aggregates + small samples (≤8 rows)
+  keep input tokens under 1k.
+
