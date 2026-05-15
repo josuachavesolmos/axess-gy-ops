@@ -4,16 +4,16 @@ compatibility_date = "2026-01-01"
 workers_dev = true
 
 # ── KV namespace ──
-# Create with:  npx wrangler kv namespace create USERS
-# Then paste the resulting id below (do NOT commit the preview_id from a personal account).
+# Created via `npx wrangler kv namespace create USERS` on 2026-05-15.
 [[kv_namespaces]]
 binding = "USERS"
-id = "REPLACE_WITH_KV_NAMESPACE_ID"
+id = "9a2fa7bc981a473cbdefdba494098dc8"
 
 # ── Allowed CORS origin(s) ──
-# Comma-separated if multiple (e.g. github.io fallback + custom domain).
+# Comma-separated. axess.olmoraia.com is the future custom domain; the github.io
+# host is the fallback in case the CNAME isn't set up yet.
 [vars]
-ALLOWED_ORIGIN = "https://axess.olmoraia.com,https://olmoraia.github.io"
+ALLOWED_ORIGIN = "https://axess.olmoraia.com,https://josuachavesolmos.github.io"
 
 # ── Secrets ──
 # JWT_SECRET is set out-of-band:
