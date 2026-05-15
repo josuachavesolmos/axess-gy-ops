@@ -27,7 +27,8 @@
 const TOKEN_TTL_SECONDS  = 86400;
 const TOKEN_TTL_REMEMBER = 30 * 86400;
 const PBKDF2_ITERATIONS  = 100000;
-const D1_MAX_ROWS_PER_INSERT = 20;   // keep bind-params < ~500 per statement
+const D1_MAX_BOUND_PARAMS = 95;       // D1 caps bind() at ~100 params per stmt
+const D1_MAX_STMTS_PER_BATCH = 50;    // D1 caps batch() at 100 stmts; stay safe
 
 // ─────────────────────── crypto helpers ───────────────────────
 
@@ -379,23 +380,32 @@ function toClient(dbRow, fields) {
   return out;
 }
 
-/** Multi-row INSERT in chunks, all under one D1 prepared statement per chunk. */
+/** Multi-row INSERT respecting D1's bind() param cap (~100). Statements are
+ *  grouped via db.batch() to amortize network round-trips.
+ */
 async function bulkInsert(db, tableName, columns, rows) {
   if (!rows.length) return 0;
+  const colCount = columns.length;
+  // Floor(95 / colCount) rows per multi-row INSERT keeps us under D1's bind cap.
+  const rowsPerStmt = Math.max(1, Math.floor(D1_MAX_BOUND_PARAMS / colCount));
   const colList = columns.join(', ');
   const placeholderRow = '(' + columns.map(() => '?').join(', ') + ')';
-  let inserted = 0;
-  for (let i = 0; i < rows.length; i += D1_MAX_ROWS_PER_INSERT) {
-    const chunk = rows.slice(i, i + D1_MAX_ROWS_PER_INSERT);
+
+  const stmts = [];
+  for (let i = 0; i < rows.length; i += rowsPerStmt) {
+    const chunk = rows.slice(i, i + rowsPerStmt);
     const sql = `INSERT INTO ${tableName} (${colList}) VALUES ${chunk.map(() => placeholderRow).join(', ')}`;
     const params = [];
     for (const r of chunk) {
       for (const c of columns) params.push(r[c] === undefined ? null : r[c]);
     }
-    await db.prepare(sql).bind(...params).run();
-    inserted += chunk.length;
+    stmts.push(db.prepare(sql).bind(...params));
   }
-  return inserted;
+
+  for (let i = 0; i < stmts.length; i += D1_MAX_STMTS_PER_BATCH) {
+    await db.batch(stmts.slice(i, i + D1_MAX_STMTS_PER_BATCH));
+  }
+  return rows.length;
 }
 
 // ─────────────────────── data routes ───────────────────────
