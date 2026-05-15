@@ -147,11 +147,75 @@
     return result.user;
   }
 
+  // ─────────────────────── Data API (D1) ───────────────────────
+
+  /** POST /data/import — send a dataset snapshot to the Worker. Fire-and-forget friendly. */
+  async function pushDataset(dataset, filename, rows, meta) {
+    if (AUTH_DISABLED) return { ok: false, skipped: true, reason: 'auth disabled (dev mode)' };
+    const t = getToken();
+    if (!t) return { ok: false, error: 'no auth token' };
+    let res;
+    try {
+      res = await fetch(WORKER_URL + '/data/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + t },
+        body: JSON.stringify({ dataset, filename: filename || null, rows: rows || [], meta: meta || null })
+      });
+    } catch (e) {
+      return { ok: false, error: 'Network error · ' + (e.message || 'fetch failed') };
+    }
+    let body; try { body = await res.json(); } catch { body = {}; }
+    if (!res.ok) return { ok: false, error: body.error || ('HTTP ' + res.status) };
+    return { ok: true, batch_id: body.batch_id, row_count: body.row_count };
+  }
+
+  /** GET /data/snapshot — returns { batch, rows[] } for a dataset, or { rows: [] } when no data. */
+  async function fetchSnapshot(dataset) {
+    if (AUTH_DISABLED) return { rows: [], skipped: true };
+    const t = getToken();
+    if (!t) return { rows: [], error: 'no auth token' };
+    let res;
+    try {
+      res = await fetch(WORKER_URL + '/data/snapshot?dataset=' + encodeURIComponent(dataset), {
+        method: 'GET',
+        headers: { 'Authorization': 'Bearer ' + t }
+      });
+    } catch (e) {
+      return { rows: [], error: 'Network error · ' + e.message };
+    }
+    let body; try { body = await res.json(); } catch { body = {}; }
+    if (!res.ok) return { rows: [], error: body.error || ('HTTP ' + res.status) };
+    return { batch: body.batch || null, rows: body.rows || [] };
+  }
+
+  /** GET /data/history — list of import batches (optionally filtered by dataset). */
+  async function fetchHistory(dataset) {
+    if (AUTH_DISABLED) return { batches: [] };
+    const t = getToken();
+    if (!t) return { batches: [], error: 'no auth token' };
+    const qs = dataset ? '?dataset=' + encodeURIComponent(dataset) : '';
+    let res;
+    try {
+      res = await fetch(WORKER_URL + '/data/history' + qs, {
+        method: 'GET',
+        headers: { 'Authorization': 'Bearer ' + t }
+      });
+    } catch (e) {
+      return { batches: [], error: 'Network error · ' + e.message };
+    }
+    let body; try { body = await res.json(); } catch { body = {}; }
+    if (!res.ok) return { batches: [], error: body.error || ('HTTP ' + res.status) };
+    return { batches: body.batches || [] };
+  }
+
   window.AxessAuth = {
     WORKER_URL,
     login,
     logout,
     verifyWithServer,
+    pushDataset,
+    fetchSnapshot,
+    fetchHistory,
     requireAuth,
     getToken,
     clearToken,

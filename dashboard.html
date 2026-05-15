@@ -1273,6 +1273,18 @@ function handleUpload(input, type) {
         : file.name + ' loaded successfully';
       toast(msg, 'success');
       loaded.forEach(t => renderTab(t));
+
+      // Fire-and-forget push to D1 (persist the snapshot so next session hydrates from server).
+      if (window.AxessAuth && typeof window.AxessAuth.pushDataset === 'function') {
+        loaded.forEach(t => {
+          const rows = state[t] && state[t].raw ? state[t].raw : [];
+          window.AxessAuth.pushDataset(t, file.name, rows).then(res => {
+            if (res && res.skipped) return; // dev mode → silently ignore
+            if (res && res.ok) toast('Saved ' + t + ' to server (' + res.row_count + ' rows · batch #' + res.batch_id + ')', 'success');
+            else toast('Server save failed for ' + t + ': ' + ((res && res.error) || 'unknown'), 'error');
+          }).catch(e => toast('Server save error for ' + t + ': ' + e.message, 'error'));
+        });
+      }
     } catch (err) {
       toast('Error: ' + err.message, 'error');
     }
@@ -5465,6 +5477,40 @@ function _initUserChip(user) {
   }
 }
 
+/**
+ * Hydrate from D1 (server-stored snapshots). Replaces state.<dataset>.raw for each
+ * dataset that has a saved batch. Demo seed remains for datasets with no saved data.
+ * Returns a list of `{ dataset, count, batch }` for hydrated datasets.
+ */
+async function hydrateFromD1() {
+  if (!window.AxessAuth || typeof window.AxessAuth.fetchSnapshot !== 'function') return [];
+  const datasets = ['quote', 'personnel', 'equipment', 'master', 'leads'];
+  const hydrated = [];
+  await Promise.all(datasets.map(async ds => {
+    let res;
+    try { res = await window.AxessAuth.fetchSnapshot(ds); }
+    catch (e) { console.warn('[hydrate] ' + ds + ' fetch failed:', e.message); return; }
+    if (!res || !Array.isArray(res.rows) || res.rows.length === 0) return;
+
+    let rows = res.rows;
+    // Equipment: re-derive Equipment ID (= Work Order) and Category (always blank).
+    if (ds === 'equipment') {
+      rows = rows.map(r => ({ ...r, 'Equipment ID': r['Work Order'] || '', 'Category': '' }));
+    }
+    // Master: mirror Status into Recent Updates for pipeline helpers that read either.
+    if (ds === 'master') {
+      rows = rows.map(r => ({ ...r, 'Recent Updates': r['Status'] || r['Recent Updates'] || '' }));
+    }
+
+    state[ds].raw = rows;
+    state[ds].filtered = [...rows];
+    hydrated.push({ dataset: ds, count: rows.length, batch: res.batch });
+    const d = document.getElementById('dot-' + ds);
+    if (d) d.className = (d.classList.contains('mini') ? 'pill-dot mini loaded' : 'pill-dot loaded');
+  }));
+  return hydrated;
+}
+
 document.addEventListener('DOMContentLoaded', async function() {
   // 1. Gate: require valid auth (redirects to index.html if missing/expired)
   let user = null;
@@ -5478,14 +5524,26 @@ document.addEventListener('DOMContentLoaded', async function() {
   const licenseValid = checkLicense();
   if (!licenseValid) return; // expired → block overlay shown, skip rendering
 
-  // 3. Render
+  // 3. Demo seed (covers datasets with no D1 snapshot yet)
   generateDemoData();
+
+  // 4. Hydrate from D1 (overrides demo for datasets that have stored snapshots)
+  const hydrated = await hydrateFromD1();
+
+  // 5. Render
   renderTab('quote');
   renderTab('personnel');
   renderTab('equipment');
   renderTab('master');
   renderTab('leads');
-  toast('Welcome ' + ((user && user.name) || 'back') + '! Upload your Excel files to see live data.', 'info');
+
+  const welcome = 'Welcome ' + ((user && user.name) || 'back') + '!';
+  if (hydrated.length > 0) {
+    const summary = hydrated.map(h => h.dataset + ' (' + h.count + ')').join(', ');
+    toast(welcome + ' Loaded from server: ' + summary, 'success');
+  } else {
+    toast(welcome + ' Upload your Excel files to see live data.', 'info');
+  }
 });
 </script>
 </body>

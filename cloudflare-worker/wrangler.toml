@@ -9,6 +9,13 @@ workers_dev = true
 binding = "USERS"
 id = "9a2fa7bc981a473cbdefdba494098dc8"
 
+# ── D1 database (dashboard data) ──
+# Created via `npx wrangler d1 create axess-gy` on 2026-05-15.
+[[d1_databases]]
+binding = "DB"
+database_name = "axess-gy"
+database_id = "de63b97f-754c-4534-b666-85a1ac9a6f0c"
+
 # ── Allowed CORS origin(s) ──
 # Comma-separated. axess.olmoraia.com is the future custom domain; the github.io
 # host is the fallback in case the CNAME isn't set up yet.
